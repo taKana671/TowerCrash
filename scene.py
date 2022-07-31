@@ -1,5 +1,5 @@
 from direct.showbase.ShowBase import ShowBase
-from panda3d.bullet import BulletRigidBodyNode, BulletPlaneShape
+from panda3d.bullet import BulletRigidBodyNode, BulletPlaneShape, BulletBoxShape
 from panda3d.core import Vec3, Point3
 from panda3d.core import PandaNode, NodePath, CardMaker
 
@@ -15,23 +15,29 @@ SHRUBBERY_PATH = 'models/shrubbery/shrubbery'
 class Foundation(NodePath):
 
     def __init__(self):
-        super().__init__(BulletRigidBodyNode('foundation'))
+        super().__init__(PandaNode('foundation'))
         self.reparentTo(base.render)
-        self.create_foundation()
+        self.stones = [stone for stone in self.lineup_stones()]
 
-    def create_foundation(self):
+    def lineup_stones(self):
         pos_hpr = [
-            [Point3(4, -2, 2), Vec3(30, 180, -360)],
-            [Point3(4, -2, 2), Vec3(30, 0, -360)],
-            [Point3(7.26, -0.1, 2), Vec3(30, 180, 180)],
-            [Point3(7.26, -0.1, 2), Vec3(30, 0, 180)]
+            [Point3(-5.8, 10.3, 0.5), Vec3(30, 180, -360)],
+            [Point3(-5.8, 10.3, 0.5), Vec3(30, 0, -360)],
+            [Point3(0.52, 14, 0.5), Vec3(30, 180, 180)],
+            [Point3(0.52, 14, 0.5), Vec3(30, 0, 180)]
         ]
         for pos, hpr in pos_hpr:
+            np = NodePath(BulletRigidBodyNode('stone'))
+            np.reparentTo(self)
             stone = base.loader.loadModel(PATH_STONE)
-            stone.setScale(0.01)
-            stone.setHpr(hpr)
-            stone.setPos(pos)
-            stone.reparentTo(self)
+            stone.reparentTo(np)
+            end, tip = stone.getTightBounds()
+            np.node().addShape(BulletBoxShape((tip - end) / 2))
+            np.setScale(0.02)
+            np.setHpr(hpr)
+            np.setPos(pos)
+
+            yield np
 
 
 class Sky(NodePath):
@@ -67,7 +73,6 @@ class Ground(NodePath):
                 g = grasses.attachNewNode(card.generate())
                 g.setP(-90)
                 g.setPos((x - max_card / 2) * size, (y - max_card / 2) * size, 0)
-                # print((x - max_card / 2) * size, (y - max_card / 2) * size, 0)
 
         texture = base.loader.loadTexture(PATH_GROUND)
         grasses.setTexture(texture)
@@ -86,14 +91,14 @@ class Plant(NodePath):
 
     def create_forest(self):
         plants = [
-            (PLANT1_PATH, 0.3, Point3(-12, 36, 2), Vec3(45, 0, 0)),
-            (PLANT1_PATH, 0.3, Point3(-16, 36, 2), Vec3(90, 0, 0)),
-            (PLANT3_PATH, 0.1, Point3(-8, 36, 2), Vec3(60, 0, 0)),
-            (PLANT3_PATH, 0.1, Point3(-4, 36, 2), Vec3(30, 0, 0)),
-            (PLANT3_PATH, 0.1, Point3(0, 36, 2), Vec3(45, 0, 0)),
-            (SHRUBBERY_PATH, 0.1, Point3(-8, 30, 2), Vec3(30, 30, 0)),
-            (SHRUBBERY_PATH, 0.1, Point3(-4, 30, 2), Vec3(60, 30, 0)),
-            (SHRUBBERY_PATH, 0.1, Point3(0, 30, 2), Vec3(90, 30, 0)),
+            (PLANT1_PATH, 0.5, Point3(-24, 60, 0), Vec3(45, 0, 0)),
+            (PLANT1_PATH, 0.5, Point3(-30, 60, 0), Vec3(90, 0, 0)),
+            (PLANT3_PATH, 0.15, Point3(-16, 60, 0), Vec3(60, 0, 0)),
+            (PLANT3_PATH, 0.15, Point3(-12, 60, 0), Vec3(30, 0, 0)),
+            (PLANT3_PATH, 0.1, Point3(-8, 60, 0), Vec3(45, 0, 0)),
+            (SHRUBBERY_PATH, 0.2, Point3(-20, 60, 0), Vec3(30, 30, 0)),
+            (SHRUBBERY_PATH, 0.2, Point3(-6, 60, 0), Vec3(60, 30, 0)),
+            (SHRUBBERY_PATH, 0.1, Point3(-10, 55, 0), Vec3(90, 30, 0)),
         ]
         for path, scale, pos, hpr in plants:
             plant = base.loader.loadModel(path)
@@ -106,10 +111,15 @@ class Plant(NodePath):
 class Scene:
 
     def __init__(self):
-        Sky()
-        Ground()
-        Foundation()
-        Plant()
+        self.sky = Sky()
+        self.ground = Ground()
+        self.foundation = Foundation()
+        self.plants = Plant()
+
+    def setup(self, physical_world):
+        physical_world.attachRigidBody(self.ground.node())
+        for stone in self.foundation.stones:
+            physical_world.attachRigidBody(stone.node())
 
 
 
@@ -120,7 +130,8 @@ if __name__ == '__main__':
     # base.setBackgroundColor(0.5, 0.8, 1)
     base.disableMouse()
 
-    base.camera.setPos(20, -18, 5)  # 20, -20, 5
-    base.camera.lookAt(5, 0, 3)  # 5, 0, 3
+    base.camera.setPos(20, -18, 10)  # 20, -20, 5
+    base.camera.setP(-80)
+    base.camera.lookAt(5, 3, 5)  # 5, 0, 3
     scene = Scene()
     base.run()
