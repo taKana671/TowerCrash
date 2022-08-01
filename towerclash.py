@@ -1,3 +1,4 @@
+import itertools
 import random
 import math
 from enum import Enum, auto
@@ -45,22 +46,26 @@ class CylinderTower(NodePath):
 
     def __init__(self, center):
         super().__init__(PandaNode('foundation'))
-        self.setPos(center)  # Point3(-2, 12, 0.3)
+        # self.setPos(center)  # Point3(-2, 12, 0.3)
+        self.center = center
         self.reparentTo(base.render)
-
         self.target_cylinder = None
 
     def create_cylinder(self, pos, color, tag):
-        np = NodePath(BulletRigidBodyNode('cylinter'))
+        np = NodePath(BulletRigidBodyNode(tag))
         np.reparentTo(self)
         cylinder = base.loader.loadModel(PATH_CYLINDER)
 
-        cylinder.find('**/Cylinder').node().setIntoCollideMask(BitMask32.bit(1))
-        cylinder.find('**/Cylinder').node().setTag('cylinder', tag)
+        # cylinder.find('**/Cylinder').node().setIntoCollideMask(BitMask32.bit(1))
+        # cylinder.find('**/Cylinder').node().setTag('cylinder', tag)
         # render/foundation/cylinter/cylinder.egg/Cylinder
 
         cylinder.reparentTo(np)
         end, tip = cylinder.getTightBounds()
+
+        # np.node().setIntoCollideMask(BitMask32.bit(1))
+        np.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2))
+
         np.node().addShape(BulletCylinderShape((tip - end) / 2))
         np.node().setMass(5)
         np.setScale(0.7)
@@ -83,7 +88,7 @@ class CylinderTower(NodePath):
                 points = [Point3(-edge / 2, ok, h), Point3(edge / 2, ok, h), Point3(0, -ok * 2, h)]
 
             for j, pt in enumerate(points):
-                cylinder = self.create_cylinder(pt, Colors.select(), str(i * 3 + j))
+                cylinder = self.create_cylinder(pt + self.center, Colors.select(), str(i * 3 + j))
                 physical_world.attachRigidBody(cylinder.node())
                 self.cylinders[i][j] = cylinder
 
@@ -92,7 +97,19 @@ class CylinderTower(NodePath):
         j = tag % 3
         self.target_cylinder = self.cylinders[i][j]
         # self.target_cylinder.node().setActive(True)
-        return self.getPos() + self.target_cylinder.getPos() + surface_pt
+        return self.target_cylinder.getPos() + surface_pt
+
+    def rotate_around(self, angle):
+        axis = Vec3.up()
+        point = Point3(-2, 12, 0.3)
+        q = Quat()
+        q.setFromAxisAngle(angle, axis.normalized())
+
+        for i, j in itertools.product(range(5), range(3)):
+            if cylinder := self.cylinders[i][j]:
+                r = q.xform(cylinder.getPos() - point)
+                pos = point + r
+                cylinder.setPos(pos)
 
 
 class Ball(NodePath):
@@ -110,8 +127,9 @@ class Ball(NodePath):
         self.setColor(Colors.select())
         self.setPos(pos)
 
-        self.node().setIntoCollideMask(BitMask32.bit(1))
-        self.node().setMass(10)
+        self.setCollideMask(BitMask32.bit(2))
+
+        self.node().setMass(30)
         # self.node().setKinematic(True)
         physical_world.attachRigidBody(self.node())
 
@@ -131,6 +149,7 @@ class TowerClash(ShowBase):
         self.camera.setHpr(0, -80, 0)
         # self.camera.lookAt(Point3(-2, 12, 0.3))
         self.camera.lookAt(5, 3, 5)  # 5, 0, 3
+        
         self.setup_lights()
         self.setup_click_detection()
         self.physical_world = BulletWorld()
@@ -188,16 +207,18 @@ class TowerClash(ShowBase):
 
         if self.mouseWatcherNode.hasMouse():
             mouse_pos = self.mouseWatcherNode.getMouse()
-            self.picker_ray.setFromLens(self.camNode, mouse_pos.getX(), mouse_pos.getY())
-            self.picker.traverse(self.tower)
+            near_pos = Point3()
+            far_pos = Point3()
+            self.camLens.extrude(mouse_pos, near_pos, far_pos)
+            from_pos = self.render.getRelativePoint(self.camera, near_pos)
+            to_pos = self.render.getRelativePoint(self.camera, far_pos)
+            result = self.physical_world.rayTestClosest(from_pos, to_pos, BitMask32.bit(1))
 
-            if self.handler.getNumEntries() > 0:
-                self.handler.sortEntries()
-                entry = self.handler.getEntry(0)
-                tag = int(entry.getIntoNode().getTag('cylinder'))
-                surface_pt = entry.getSurfacePoint(entry.getIntoNodePath())
-                self.ball.destination = self.tower.get_collision_pt(tag, surface_pt)
-
+            if result.hasHit():
+                print('Hit!')
+                tag = result.getNode().getName()
+                dest = result.getHitPos()
+                self.ball.destination = dest
                 print('tag', tag)
                 print('collision_pt', self.ball.destination)
                 self.mouse_grabbed = True
@@ -224,19 +245,13 @@ class TowerClash(ShowBase):
             self.mouse_x = mouse_x
 
         if rotation_angle := velocity * dt:
-            self.tower.setH(self.tower.getH() + rotation_angle)
+            self.tower.rotate_around(rotation_angle)
 
-        # if self.tower.target_cylinder:
-        #     result = self.physical_world.contactTestPair(self.ball.node(), self.tower.target_cylinder.node())
-        #     if result.getNumContacts() > 0:
-        #         print('Collid')
-
-        result = self.physical_world.contactTest(self.scene.ground.node())
-        for c in result.getContacts():
-            print(c.getNode0())
-            if c.getNode0().getName() == 'cylinder':
-                c.getNode0().setMass(0)
-
+        for i, j in itertools.product(range(5), range(3)):
+            if cylinder := self.tower.cylinders[i][j]:
+                result = self.physical_world.contactTestPair(self.scene.ground.node(), cylinder.node())
+                if result.getNumContacts() > 0:
+                    self.tower.cylinders[i][j] = None
 
         self.physical_world.doPhysics(dt)
         return task.cont

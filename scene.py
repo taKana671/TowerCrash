@@ -1,6 +1,6 @@
 from direct.showbase.ShowBase import ShowBase
 from panda3d.bullet import BulletRigidBodyNode, BulletPlaneShape, BulletBoxShape
-from panda3d.core import Vec3, Point3
+from panda3d.core import Vec3, Point3, BitMask32
 from panda3d.core import PandaNode, NodePath, CardMaker
 
 
@@ -58,6 +58,7 @@ class Ground(NodePath):
         self.reparentTo(base.render)
         grasses = self.create_grasses()
         grasses.reparentTo(self)
+        self.setCollideMask(BitMask32.bit(2))
         self.node().addShape(BulletPlaneShape(Vec3.up(), 0))
 
     def create_grasses(self):
@@ -120,7 +121,6 @@ class Scene:
         physical_world.attachRigidBody(self.ground.node())
         for stone in self.foundation.stones:
             physical_world.attachRigidBody(stone.node())
-
 
 
 if __name__ == '__main__':
