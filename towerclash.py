@@ -44,10 +44,11 @@ class Colors(Enum):
 
 class CylinderTower(NodePath):
 
-    def __init__(self, center):
+    def __init__(self, center, foundation):
         super().__init__(PandaNode('foundation'))
-        # self.setPos(center)  # Point3(-2, 12, 0.3)
-        self.center = center
+        self.center = center  # Point3(-2, 12, 0.3)
+        self.foundation = foundation
+        self.axis = Vec3.up()
         self.reparentTo(base.render)
         self.target_cylinder = None
 
@@ -55,17 +56,9 @@ class CylinderTower(NodePath):
         np = NodePath(BulletRigidBodyNode(tag))
         np.reparentTo(self)
         cylinder = base.loader.loadModel(PATH_CYLINDER)
-
-        # cylinder.find('**/Cylinder').node().setIntoCollideMask(BitMask32.bit(1))
-        # cylinder.find('**/Cylinder').node().setTag('cylinder', tag)
-        # render/foundation/cylinter/cylinder.egg/Cylinder
-
         cylinder.reparentTo(np)
         end, tip = cylinder.getTightBounds()
-
-        # np.node().setIntoCollideMask(BitMask32.bit(1))
         np.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2))
-
         np.node().addShape(BulletCylinderShape((tip - end) / 2))
         np.node().setMass(5)
         np.setScale(0.7)
@@ -92,23 +85,15 @@ class CylinderTower(NodePath):
                 physical_world.attachRigidBody(cylinder.node())
                 self.cylinders[i][j] = cylinder
 
-    def get_collision_pt(self, tag, surface_pt):
-        i = tag // 3
-        j = tag % 3
-        self.target_cylinder = self.cylinders[i][j]
-        # self.target_cylinder.node().setActive(True)
-        return self.target_cylinder.getPos() + surface_pt
-
     def rotate_around(self, angle):
-        axis = Vec3.up()
-        point = Point3(-2, 12, 0.3)
+        self.foundation.setH(self.foundation.getH() + angle)
         q = Quat()
-        q.setFromAxisAngle(angle, axis.normalized())
+        q.setFromAxisAngle(angle, self.axis.normalized())
 
         for i, j in itertools.product(range(5), range(3)):
             if cylinder := self.cylinders[i][j]:
-                r = q.xform(cylinder.getPos() - point)
-                pos = point + r
+                r = q.xform(cylinder.getPos() - self.center)
+                pos = self.center + r
                 cylinder.setPos(pos)
 
 
@@ -149,7 +134,7 @@ class TowerClash(ShowBase):
         self.camera.setHpr(0, -80, 0)
         # self.camera.lookAt(Point3(-2, 12, 0.3))
         self.camera.lookAt(5, 3, 5)  # 5, 0, 3
-        
+
         self.setup_lights()
         self.setup_click_detection()
         self.physical_world = BulletWorld()
@@ -161,7 +146,8 @@ class TowerClash(ShowBase):
 
         self.ball = Ball(Point3(6, 0, 0.5), self.physical_world)
 
-        self.mouse_dragging = False
+        self.dragging_duration = 0
+        self.max_duration = 5
         self.mouse_grabbed = False
 
         self.accept('mouse1', self.click)
@@ -169,8 +155,8 @@ class TowerClash(ShowBase):
         self.taskMgr.add(self.update, 'update')
 
     def create_tower(self):
-        center = Point3(-2, 12, 0.3)
-        self.tower = CylinderTower(center)
+        center = Point3(-2, 12, 1.0)
+        self.tower = CylinderTower(center, self.scene.foundation)
         self.tower.build(5, self.physical_world)
 
     def setup_click_detection(self):
@@ -202,7 +188,7 @@ class TowerClash(ShowBase):
         self.ball = Ball(Point3(10, -10, 2))
 
     def click(self):
-        self.mouse_dragging = False
+        self.dragging_duration = 0
         self.mouse_grabbed = False
 
         if self.mouseWatcherNode.hasMouse():
@@ -224,10 +210,10 @@ class TowerClash(ShowBase):
                 self.mouse_grabbed = True
             else:
                 self.mouse_x = 0
-                self.mouse_dragging = True
+                self.dragging_duration += 1
 
     def release(self):
-        self.mouse_dragging = False
+        self.dragging_duration = 0
 
     def update(self, task):
         dt = globalClock.getDt()
@@ -236,16 +222,17 @@ class TowerClash(ShowBase):
         if self.mouse_grabbed:
             self.mouse_grabbed = False
             self.ball.move()
-        if self.mouse_dragging:
+        if self.dragging_duration:
             mouse_x = self.mouseWatcherNode.getMouse().getX()
             if (delta := mouse_x - self.mouse_x) < 0:
                 velocity -= 90
             elif delta > 0:
                 velocity += 90
             self.mouse_x = mouse_x
+            self.dragging_duration += 1
 
-        if rotation_angle := velocity * dt:
-            self.tower.rotate_around(rotation_angle)
+        if self.dragging_duration >= self.max_duration:
+            self.tower.rotate_around(velocity * dt)
 
         for i, j in itertools.product(range(5), range(3)):
             if cylinder := self.tower.cylinders[i][j]:

@@ -1,43 +1,32 @@
 from direct.showbase.ShowBase import ShowBase
-from panda3d.bullet import BulletRigidBodyNode, BulletPlaneShape, BulletBoxShape
+from panda3d.bullet import BulletRigidBodyNode, BulletPlaneShape, BulletCylinderShape
 from panda3d.core import Vec3, Point3, BitMask32
 from panda3d.core import PandaNode, NodePath, CardMaker
 
 
 PATH_GROUND = 'textures/ground.jpg'
-PATH_SKY = "models/blue-sky/blue-sky-sphere"
-PATH_STONE = 'models/stone/jump'
+PATH_SKY = 'models/blue-sky/blue-sky-sphere'
 PLANT1_PATH = 'models/plant1/plants1'
 PLANT3_PATH = 'models/plant3/plants3'
 SHRUBBERY_PATH = 'models/shrubbery/shrubbery'
+PATH_STONE = 'models/cylinder/cylinder'
+TEXTURE_STONE = 'textures/envir-rock1.jpg'
 
 
 class Foundation(NodePath):
 
     def __init__(self):
-        super().__init__(PandaNode('foundation'))
+        super().__init__(BulletRigidBodyNode('foundation'))
         self.reparentTo(base.render)
-        self.stones = [stone for stone in self.lineup_stones()]
-
-    def lineup_stones(self):
-        pos_hpr = [
-            [Point3(-5.8, 10.3, 0.5), Vec3(30, 180, -360)],
-            [Point3(-5.8, 10.3, 0.5), Vec3(30, 0, -360)],
-            [Point3(0.52, 14, 0.5), Vec3(30, 180, 180)],
-            [Point3(0.52, 14, 0.5), Vec3(30, 0, 180)]
-        ]
-        for pos, hpr in pos_hpr:
-            np = NodePath(BulletRigidBodyNode('stone'))
-            np.reparentTo(self)
-            stone = base.loader.loadModel(PATH_STONE)
-            stone.reparentTo(np)
-            end, tip = stone.getTightBounds()
-            np.node().addShape(BulletBoxShape((tip - end) / 2))
-            np.setScale(0.02)
-            np.setHpr(hpr)
-            np.setPos(pos)
-
-            yield np
+        stone = base.loader.loadModel(PATH_STONE)
+        stone.setTexture(
+            base.loader.loadTexture(TEXTURE_STONE), 1)
+        stone.reparentTo(self)
+        end, tip = stone.getTightBounds()
+        self.node().addShape(BulletCylinderShape((tip - end) / 2))
+        self.setScale(7)
+        self.setCollideMask(BitMask32.bit(2))
+        self.setPos(Point3(-2, 12, -10))
 
 
 class Sky(NodePath):
@@ -119,8 +108,7 @@ class Scene:
 
     def setup(self, physical_world):
         physical_world.attachRigidBody(self.ground.node())
-        for stone in self.foundation.stones:
-            physical_world.attachRigidBody(stone.node())
+        physical_world.attachRigidBody(self.foundation.node())
 
 
 if __name__ == '__main__':
@@ -130,7 +118,7 @@ if __name__ == '__main__':
     # base.setBackgroundColor(0.5, 0.8, 1)
     base.disableMouse()
 
-    base.camera.setPos(20, -18, 10)  # 20, -20, 5
+    base.camera.setPos(20, -18, 20)  # 20, -20, 5
     base.camera.setP(-80)
     base.camera.lookAt(5, 3, 5)  # 5, 0, 3
     scene = Scene()
