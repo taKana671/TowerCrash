@@ -27,6 +27,14 @@ PATH_CYLINDER = "models/cylinder/cylinder"
 # PATH_CYLINDER = "models/alice-shapes--box/box"
 
 
+class BlockState(Enum):
+
+    ACTIVE = auto()
+    STAY = auto()
+    GROUNDED = auto()
+    DELETED = auto()
+    STOPPED = auto()
+
 
 class Colors(Enum):
 
@@ -42,30 +50,14 @@ class Colors(Enum):
         return random.choice([m.value for m in cls])
 
 
-class CylinderTower(NodePath):
+class CylinderTower:
 
     def __init__(self, center, foundation):
-        super().__init__(PandaNode('foundation'))
+        self.root = NodePath(PandaNode('cylinderTower'))
         self.center = center  # Point3(-2, 12, 0.3)
         self.foundation = foundation
         self.axis = Vec3.up()
-        self.reparentTo(base.render)
-        self.target_cylinder = None
-
-    def create_cylinder(self, pos, color, tag):
-        np = NodePath(BulletRigidBodyNode(tag))
-        np.reparentTo(self)
-        cylinder = base.loader.loadModel(PATH_CYLINDER)
-        cylinder.reparentTo(np)
-        end, tip = cylinder.getTightBounds()
-        np.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2))
-        np.node().addShape(BulletCylinderShape((tip - end) / 2))
-        np.node().setMass(5)
-        np.setScale(0.7)
-        np.setColor(color)
-        np.setPos(pos)
-
-        return np
+        self.root.reparentTo(base.render)
 
     def build(self, stories, physical_world):
         self.cylinders = [[None for _ in range(3)] for _ in range(stories)]
@@ -81,7 +73,7 @@ class CylinderTower(NodePath):
                 points = [Point3(-edge / 2, ok, h), Point3(edge / 2, ok, h), Point3(0, -ok * 2, h)]
 
             for j, pt in enumerate(points):
-                cylinder = self.create_cylinder(pt + self.center, Colors.select(), str(i * 3 + j))
+                cylinder = Cylinder(self.root, pt + self.center, str(i * 3 + j), BlockState.ACTIVE)
                 physical_world.attachRigidBody(cylinder.node())
                 self.cylinders[i][j] = cylinder
 
@@ -91,10 +83,27 @@ class CylinderTower(NodePath):
         q.setFromAxisAngle(angle, self.axis.normalized())
 
         for i, j in itertools.product(range(5), range(3)):
-            if cylinder := self.cylinders[i][j]:
+            if (cylinder := self.cylinders[i][j]).state == BlockState.ACTIVE:
                 r = q.xform(cylinder.getPos() - self.center)
                 pos = self.center + r
                 cylinder.setPos(pos)
+
+
+class Cylinder(NodePath):
+
+    def __init__(self, root, pos, name, state):
+        super().__init__(BulletRigidBodyNode(name))
+        self.reparentTo(root)
+        cylinder = base.loader.loadModel(PATH_CYLINDER)
+        cylinder.reparentTo(self)
+        end, tip = cylinder.getTightBounds()
+        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2))
+        self.node().addShape(BulletCylinderShape((tip - end) / 2))
+        self.node().setMass(5)
+        self.setScale(0.7)
+        self.setColor(Colors.select())
+        self.setPos(pos)
+        self.state = state
 
 
 class Ball(NodePath):
@@ -235,10 +244,36 @@ class TowerClash(ShowBase):
             self.tower.rotate_around(velocity * dt)
 
         for i, j in itertools.product(range(5), range(3)):
-            if cylinder := self.tower.cylinders[i][j]:
-                result = self.physical_world.contactTestPair(self.scene.ground.node(), cylinder.node())
+            if (block := self.tower.cylinders[i][j]).state == BlockState.ACTIVE:
+                result = self.physical_world.contactTestPair(
+                    self.scene.ground.node(), block.node()
+                )
                 if result.getNumContacts() > 0:
-                    self.tower.cylinders[i][j] = None
+                    # print('ground', block.getName())
+                    block.state = BlockState.GROUNDED
+
+        for i, j in itertools.product(range(5), range(3)):
+            if (block := self.tower.cylinders[i][j]).state == BlockState.GROUNDED:
+                result = self.physical_world.contactTestPair(
+                    self.scene.ground.node(), block.node()
+                )
+
+                if result.getNumContacts() == 0:
+                    # print('stop', block.getName())
+                    block.state = BlockState.STOPPED
+
+
+                for contact in result.getContacts():
+                    mp = contact.getManifoldPoint()
+                    pt = mp.getPositionWorldOnA()
+                    # if not (-50 <= pt.x <= 60 and -50 <= pt.y <= 60):  
+                    if pt.x < -50 or pt.x > 48 or pt.y < -50 or pt.y > 48:
+                        print(pt)
+                        block.state = BlockState.DELETED
+                        block.node().setStatic(True)
+                        # print('delete', block.getName())
+                        # block.removeNode()
+                        # block.state = BlockState.DELETED
 
         self.physical_world.doPhysics(dt)
         return task.cont

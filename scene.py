@@ -1,5 +1,6 @@
 from direct.showbase.ShowBase import ShowBase
-from panda3d.bullet import BulletRigidBodyNode, BulletPlaneShape, BulletCylinderShape
+from panda3d.bullet import BulletRigidBodyNode
+from panda3d.bullet import BulletPlaneShape, BulletCylinderShape, BulletBoxShape
 from panda3d.core import Vec3, Point3, BitMask32
 from panda3d.core import PandaNode, NodePath, CardMaker
 
@@ -23,7 +24,7 @@ class Foundation(NodePath):
             base.loader.loadTexture(TEXTURE_STONE), 1)
         stone.reparentTo(self)
         end, tip = stone.getTightBounds()
-        self.node().addShape(BulletCylinderShape((tip - end) / 2))
+        self.node().addShape(BulletBoxShape((tip - end) / 2))
         self.setScale(7)
         self.setCollideMask(BitMask32.bit(2))
         self.setPos(Point3(-2, 12, -10))
@@ -75,9 +76,9 @@ class Ground(NodePath):
 class Plant(NodePath):
 
     def __init__(self):
-        super().__init__(PandaNode('plant'))
+        super().__init__(PandaNode('plants'))
         self.reparentTo(base.render)
-        self.create_forest()
+        self.plants = [plant for plant in self.create_forest()]
 
     def create_forest(self):
         plants = [
@@ -91,11 +92,18 @@ class Plant(NodePath):
             (SHRUBBERY_PATH, 0.1, Point3(-10, 55, 0), Vec3(90, 30, 0)),
         ]
         for path, scale, pos, hpr in plants:
+            np = NodePath(BulletRigidBodyNode('plant'))
+            np.reparentTo(self)
             plant = base.loader.loadModel(path)
-            plant.setScale(scale)
-            plant.setPos(pos)
-            plant.setHpr(hpr)
-            plant.reparentTo(self)
+            plant.reparentTo(np)
+            end, tip = plant.getTightBounds()
+            np.node().addShape(BulletBoxShape((tip - end) / 2))
+            np.setCollideMask(BitMask32.bit(2))
+            np.setScale(scale)
+            np.setPos(pos)
+            np.setHpr(hpr)
+
+            yield np
 
 
 class Scene:
@@ -104,11 +112,14 @@ class Scene:
         self.sky = Sky()
         self.ground = Ground()
         self.foundation = Foundation()
-        self.plants = Plant()
+        self.plant = Plant()
 
     def setup(self, physical_world):
         physical_world.attachRigidBody(self.ground.node())
         physical_world.attachRigidBody(self.foundation.node())
+
+        for plant in self.plant.plants:
+            physical_world.attachRigidBody(plant.node())
 
 
 if __name__ == '__main__':
