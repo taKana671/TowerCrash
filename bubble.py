@@ -1,5 +1,4 @@
 from direct.showbase.ShowBase import ShowBase
-# from panda3d.core import Vec3, Point3, BitMask32
 from panda3d.core import PandaNode, NodePath
 
 from direct.interval.IntervalGlobal import Sequence, Parallel, Func
@@ -30,16 +29,23 @@ class Bubbles(NodePath):
             bub.posHprScaleInterval(0.5, bub.getPos() + delta1, bub.getHpr(), 0.1),
             bub.posHprScaleInterval(0.5, bub.getPos() + delta2, bub.getHpr(), 0.01),
             Func(lambda: bub.removeNode())
-        )    
+        )
 
     def start(self):
         deltas = [
-            [(0, 0, 1), (0, 0, -1)],
-            [(1, 0, 1), (2, 0, -1)],
-            [(0, 1, 1), (0, 2, -1)], 
-            [(-1, 0, 1), (-2, 0, -1)],
-            [(0, -1, 1), (0, -2, -1)]
+            [(0, -2, 1), (0, -2, -2)],
+            [(1, -2, 1), (2, -2, -1)],
+            [(0, -3, 1), (0, -4, -1)],
+            [(-1, -2, 1), (-2, -2, -1)],
+            [(0, -3, 2), (0, -4, -1)]
         ]
+        # deltas = [
+        #     [(0, 0, 1), (0, 0, -1)],
+        #     [(1, 0, 1), (2, 0, -1)],
+        #     [(0, 1, 1), (0, 2, -1)],
+        #     [(-1, 0, 1), (-2, 0, -1)],
+        #     [(0, -1, 1), (0, -2, -1)]
+        # ]
         self.bubbles = [bub for bub in self.create_bubbles()]
         Parallel(*[self.create_seq(bub, *delta) for bub, delta in zip(self.bubbles, deltas)]).start()
 

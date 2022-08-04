@@ -1,6 +1,6 @@
 import itertools
-import random
 import math
+import random
 from enum import Enum, auto
 
 from direct.gui.DirectGui import OnscreenText, ScreenTitle
@@ -51,22 +51,50 @@ class Colors(Enum):
         return random.choice([m.value for m in cls])
 
 
+class Blocks:
+
+    def __init__(self, cols, rows):
+        self.cols = cols
+        self.rows = rows
+        self.blocks = [[None for _ in range(cols)] for _ in range(rows)]
+
+    def __iter__(self):
+        for i, j in itertools.product(range(self.rows), range(self.cols)):
+            yield self.blocks[i][j]
+
+    def __call__(self, i, j, item):
+        self.blocks[i][j] = item
+
+    def get_from_node_name(self, node_name):
+        j = int(node_name) % 3
+        i = int(node_name) // 3
+
+        return self.blocks[i][j]
+
+
 class CylinderTower:
 
-    def __init__(self, center, foundation):
+    def __init__(self, center, stories, foundation):
         self.root = NodePath(PandaNode('cylinderTower'))
         self.center = center  # Point3(-2, 12, 0.3)
+        self.stories = stories
         self.foundation = foundation
         self.axis = Vec3.up()
         self.root.reparentTo(base.render)
 
-    def build(self, stories, physical_world):
-        self.cylinders = [[None for _ in range(3)] for _ in range(stories)]
+    def get_attrib(self, i):
+        if i <= self.stories * 2 / 3:
+            return LColor(0.25, 0.25, 0.25, 1), BlockState.STAY
+        else:
+            return Colors.select(), BlockState.ACTIVE
+
+    def build(self, physical_world):
+        self.blocks = Blocks(3, self.stories)
         edge = 1.5                     # the length of one side
         ok = edge / 2 / math.sqrt(3)   # the length of line OK, O: center of triangle 
         height = 2.5
 
-        for i in range(stories):
+        for i in range(self.stories):
             h = height * (i + 1)
             if i % 2 == 0:
                 points = [Point3(edge / 2, -ok, h), Point3(-edge / 2, -ok, h), Point3(0, ok * 2, h)]
@@ -74,115 +102,73 @@ class CylinderTower:
                 points = [Point3(-edge / 2, ok, h), Point3(edge / 2, ok, h), Point3(0, -ok * 2, h)]
 
             for j, pt in enumerate(points):
-                cylinder = Cylinder(self.root, pt + self.center, str(i * 3 + j), BlockState.ACTIVE)
+                color, state = self.get_attrib(i)
+                cylinder = Cylinder(self.root, pt + self.center, str(i * 3 + j), color, state)
                 physical_world.attachRigidBody(cylinder.node())
-                self.cylinders[i][j] = cylinder
+                self.blocks(i, j, cylinder)
 
     def rotate_around(self, angle):
         self.foundation.setH(self.foundation.getH() + angle)
         q = Quat()
         q.setFromAxisAngle(angle, self.axis.normalized())
 
-        for i, j in itertools.product(range(5), range(3)):
-            if (cylinder := self.cylinders[i][j]).state == BlockState.ACTIVE:
-                r = q.xform(cylinder.getPos() - self.center)
+        for block in self.blocks:
+            if block.state in {BlockState.ACTIVE, BlockState.STAY}:
+                r = q.xform(block.getPos() - self.center)
                 pos = self.center + r
-                cylinder.setPos(pos)
-
-
-    # def move(self, cylinder):
-    #     # i = tag % 3
-    #     # j = tag // 3
-    #     # cylinder = self.cylinders[i][j]
-    #     cylinder.node().setActive(True)
-    #     impulse = Vec3.forward() * 10
-    #     cylinder.node().applyImpulse(impulse, pos)
-
-
+                block.setPos(pos)
 
 
 class Cylinder(NodePath):
 
-    def __init__(self, root, pos, name, state):
+    def __init__(self, root, pos, name, color, state):
         super().__init__(BulletRigidBodyNode(name))
         self.reparentTo(root)
+        self.state = state
         cylinder = base.loader.loadModel(PATH_CYLINDER)
         cylinder.reparentTo(self)
         end, tip = cylinder.getTightBounds()
         self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2))
         self.node().addShape(BulletCylinderShape((tip - end) / 2))
-        self.node().setMass(1)
+        if self.state == BlockState.ACTIVE:
+            self.node().setMass(1)
         self.setScale(0.7)
-        self.setColor(Colors.select())
+        self.setColor(color)
         self.setPos(pos)
-        self.state = state
 
     def move(self, pos):
-        # i = tag % 3
-        # j = tag // 3
-        # cylinder = self.cylinders[i][j]
         self.node().setActive(True)
-        impulse = Vec3.forward() * 10
+        impulse = Vec3.forward() * random.randint(1, 5)
         self.node().applyImpulse(impulse, pos)
-
-
 
 
 class Ball(NodePath):
 
-    def __init__(self, pos, physical_world):
+    def __init__(self, pos):
         super().__init__(PandaNode('ball'))
-        self.reparentTo(base.render)
         ball = base.loader.loadModel('models/sphere/sphere')
         ball.reparentTo(self)
-    #     end, tip = ball.getTightBounds()
-    #     size = tip - end
-    #     radius = size.z / 2
-    #     self.node().addShape(BulletSphereShape(radius))
         self.setScale(0.2)
+        self.pos = pos
+
+    def setup(self):
+        self.setPos(self.pos)
         self.setColor(Colors.select())
-        self.setPos(pos)
+        self.reparentTo(base.render)
 
-    #     self.setCollideMask(BitMask32.bit(2))
+    def move(self, clicked_pos, block):
+        bubbles = Bubbles(self.getColor(), clicked_pos)
+        para = Parallel(Func(lambda: bubbles.start()))
 
-    #     self.node().setMass(30)
-    #     self.node().setKinematic(True)
-    #     physical_world.attachRigidBody(self.node())
+        if block.getColor() == self.getColor():
+            para.append(Func(lambda: block.move(clicked_pos)))
 
-        self.destination = None
-
-
-        # super().__init__(BulletRigidBodyNode('ball'))
-        # self.reparentTo(base.render)
-        # ball = base.loader.loadModel('models/sphere/sphere')
-        # ball.reparentTo(self)
-        # end, tip = ball.getTightBounds()
-        # size = tip - end
-        # radius = size.z / 2
-        # self.node().addShape(BulletSphereShape(radius))
-        # self.setScale(0.2)
-        # self.setColor(Colors.select())
-        # self.setPos(pos)
-
-        # self.setCollideMask(BitMask32.bit(2))
-
-        # self.node().setMass(30)
-        # self.node().setKinematic(True)
-        # physical_world.attachRigidBody(self.node())
-
-        # self.destination = None
-
-    def move(self):
-        bubbles = Bubbles(self.getColor(), self.destination)
         Sequence(
-            self.posInterval(0.5, self.destination),
+            self.posInterval(0.5, clicked_pos),
             Func(lambda: self.detachNode()),
-            Parallel(Func(lambda: bubbles.start()), self.target)
+            para,
+            Func(lambda: self.setup())
         ).start()
-
-
-        # self.posInterval(0.5, self.destination).start()
-        
 
 
 class TowerClash(ShowBase):
@@ -191,8 +177,8 @@ class TowerClash(ShowBase):
         super().__init__()
         self.disableMouse()
         self.camera.setPos(20, -18, 10)  # 20, -20, 5
-        self.camera.setHpr(0, -80, 0)
-        # self.camera.lookAt(Point3(-2, 12, 0.3))
+        # self.camera.setHpr(0, -80, 0)
+        self.camera.lookAt(Point3(-2, 12, 0.3))
         self.camera.lookAt(5, 3, 5)  # 5, 0, 3
 
         self.setup_lights()
@@ -201,14 +187,15 @@ class TowerClash(ShowBase):
         self.physical_world.setGravity(Vec3(0, 0, -9.81))
 
         self.scene = Scene()
-        self.create_tower()
         self.scene.setup(self.physical_world)
+        self.create_tower()
+        self.camera.setPos(20, -18, 60)
 
-        self.ball = Ball(Point3(6, 0, 0.5), self.physical_world)
+        self.ball = Ball(Point3(6, 0, 50))
+        self.ball.setup()
 
         self.dragging_duration = 0
         self.max_duration = 5
-        self.mouse_grabbed = False
 
         self.accept('mouse1', self.click)
         self.accept('mouse1-up', self.release)
@@ -216,8 +203,8 @@ class TowerClash(ShowBase):
 
     def create_tower(self):
         center = Point3(-2, 12, 1.0)
-        self.tower = CylinderTower(center, self.scene.foundation)
-        self.tower.build(5, self.physical_world)
+        self.tower = CylinderTower(center, 24, self.scene.foundation)
+        self.tower.build(self.physical_world)
 
     def setup_click_detection(self):
         self.picker = CollisionTraverser()
@@ -244,12 +231,8 @@ class TowerClash(ShowBase):
         self.render.setShaderAuto()
         self.render.setLight(directional_light)
 
-    def create_ball(self):
-        self.ball = Ball(Point3(10, -10, 2))
-
     def click(self):
         self.dragging_duration = 0
-        self.mouse_grabbed = False
 
         if self.mouseWatcherNode.hasMouse():
             mouse_pos = self.mouseWatcherNode.getMouse()
@@ -261,20 +244,15 @@ class TowerClash(ShowBase):
             result = self.physical_world.rayTestClosest(from_pos, to_pos, BitMask32.bit(1))
 
             if result.hasHit():
-                print('Hit!')
-                tag = result.getNode().getName()
-                dest = result.getHitPos()
-                self.ball.destination = dest
-                
-                j = int(tag) % 3
-                i = int(tag) // 3
-                cylinder = self.tower.cylinders[i][j]
-                
-                self.ball.target = Func(lambda: cylinder.move(dest))
-                
-                print('tag', tag)
-                print('collision_pt', self.ball.destination)
-                self.mouse_grabbed = True
+                node_name = result.getNode().getName()
+                clicked_pos = result.getHitPos()
+
+                block = self.tower.blocks.get_from_node_name(node_name)
+                if block.state == BlockState.ACTIVE:
+                    self.ball.move(clicked_pos, block)
+
+                print('node_name', node_name)
+                print('collision_pt', clicked_pos)
             else:
                 self.mouse_x = 0
                 self.dragging_duration += 1
@@ -286,9 +264,6 @@ class TowerClash(ShowBase):
         dt = globalClock.getDt()
         velocity = 0
 
-        if self.mouse_grabbed:
-            self.mouse_grabbed = False
-            self.ball.move()
         if self.dragging_duration:
             mouse_x = self.mouseWatcherNode.getMouse().getX()
             if (delta := mouse_x - self.mouse_x) < 0:
@@ -301,18 +276,17 @@ class TowerClash(ShowBase):
         if self.dragging_duration >= self.max_duration:
             self.tower.rotate_around(velocity * dt)
 
-        for i, j in itertools.product(range(5), range(3)):
-            if (block := self.tower.cylinders[i][j]).state == BlockState.ACTIVE:
+        for block in self.tower.blocks:
+            if block.state == BlockState.ACTIVE:
                 result = self.physical_world.contactTestPair(
                     self.scene.ground.node(), block.node()
                 )
                 if result.getNumContacts() > 0:
                     # print('ground', block.getName())
-                    block.node().friction = 1
                     block.state = BlockState.GROUNDED
 
-        for i, j in itertools.product(range(5), range(3)):
-            if (block := self.tower.cylinders[i][j]).state == BlockState.GROUNDED:
+        for block in self.tower.blocks:
+            if block.state == BlockState.GROUNDED:
                 result = self.physical_world.contactTestPair(
                     self.scene.ground.node(), block.node()
                 )
@@ -320,10 +294,6 @@ class TowerClash(ShowBase):
                 if result.getNumContacts() == 0:
                     # print('stop', block.getName())
                     block.state = BlockState.STOPPED
-
-        
-
-
 
                 # for contact in result.getContacts():
                 #     mp = contact.getManifoldPoint()
