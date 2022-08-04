@@ -171,7 +171,7 @@ class Ball(NodePath):
         ).start()
 
 
-class TowerClash(ShowBase):
+class TowerCrash(ShowBase):
 
     def __init__(self):
         super().__init__()
@@ -312,7 +312,7 @@ class TowerClash(ShowBase):
 
 
 if __name__ == '__main__':
-    game = TowerClash()
+    game = TowerCrash()
     game.run()
     # base = ShowBase()
     # base.setBackgroundColor(1, 1, 1)
