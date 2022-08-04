@@ -20,6 +20,7 @@ from panda3d.core import CollisionTraverser, CollisionNode
 from panda3d.core import CollisionHandlerQueue, CollisionRay
 from panda3d.core import WindowProperties
 
+from bubble import Bubbles
 from scene import Scene
 
 
@@ -89,6 +90,17 @@ class CylinderTower:
                 cylinder.setPos(pos)
 
 
+    # def move(self, cylinder):
+    #     # i = tag % 3
+    #     # j = tag // 3
+    #     # cylinder = self.cylinders[i][j]
+    #     cylinder.node().setActive(True)
+    #     impulse = Vec3.forward() * 10
+    #     cylinder.node().applyImpulse(impulse, pos)
+
+
+
+
 class Cylinder(NodePath):
 
     def __init__(self, root, pos, name, state):
@@ -99,39 +111,78 @@ class Cylinder(NodePath):
         end, tip = cylinder.getTightBounds()
         self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2))
         self.node().addShape(BulletCylinderShape((tip - end) / 2))
-        self.node().setMass(5)
+        self.node().setMass(1)
         self.setScale(0.7)
         self.setColor(Colors.select())
         self.setPos(pos)
         self.state = state
 
+    def move(self, pos):
+        # i = tag % 3
+        # j = tag // 3
+        # cylinder = self.cylinders[i][j]
+        self.node().setActive(True)
+        impulse = Vec3.forward() * 10
+        self.node().applyImpulse(impulse, pos)
+
+
+
 
 class Ball(NodePath):
 
     def __init__(self, pos, physical_world):
-        super().__init__(BulletRigidBodyNode('ball'))
+        super().__init__(PandaNode('ball'))
         self.reparentTo(base.render)
         ball = base.loader.loadModel('models/sphere/sphere')
         ball.reparentTo(self)
-        end, tip = ball.getTightBounds()
-        size = tip - end
-        radius = size.z / 2
-        self.node().addShape(BulletSphereShape(radius))
+    #     end, tip = ball.getTightBounds()
+    #     size = tip - end
+    #     radius = size.z / 2
+    #     self.node().addShape(BulletSphereShape(radius))
         self.setScale(0.2)
         self.setColor(Colors.select())
         self.setPos(pos)
 
-        self.setCollideMask(BitMask32.bit(2))
+    #     self.setCollideMask(BitMask32.bit(2))
 
-        self.node().setMass(30)
-        # self.node().setKinematic(True)
-        physical_world.attachRigidBody(self.node())
+    #     self.node().setMass(30)
+    #     self.node().setKinematic(True)
+    #     physical_world.attachRigidBody(self.node())
 
         self.destination = None
 
+
+        # super().__init__(BulletRigidBodyNode('ball'))
+        # self.reparentTo(base.render)
+        # ball = base.loader.loadModel('models/sphere/sphere')
+        # ball.reparentTo(self)
+        # end, tip = ball.getTightBounds()
+        # size = tip - end
+        # radius = size.z / 2
+        # self.node().addShape(BulletSphereShape(radius))
+        # self.setScale(0.2)
+        # self.setColor(Colors.select())
+        # self.setPos(pos)
+
+        # self.setCollideMask(BitMask32.bit(2))
+
+        # self.node().setMass(30)
+        # self.node().setKinematic(True)
+        # physical_world.attachRigidBody(self.node())
+
+        # self.destination = None
+
     def move(self):
-        self.posInterval(0.5, self.destination).start()
-        # self.setPos(self.destination)
+        bubbles = Bubbles(self.getColor(), self.destination)
+        Sequence(
+            self.posInterval(0.5, self.destination),
+            Func(lambda: self.detachNode()),
+            Parallel(Func(lambda: bubbles.start()), self.target)
+        ).start()
+
+
+        # self.posInterval(0.5, self.destination).start()
+        
 
 
 class TowerClash(ShowBase):
@@ -214,6 +265,13 @@ class TowerClash(ShowBase):
                 tag = result.getNode().getName()
                 dest = result.getHitPos()
                 self.ball.destination = dest
+                
+                j = int(tag) % 3
+                i = int(tag) // 3
+                cylinder = self.tower.cylinders[i][j]
+                
+                self.ball.target = Func(lambda: cylinder.move(dest))
+                
                 print('tag', tag)
                 print('collision_pt', self.ball.destination)
                 self.mouse_grabbed = True
@@ -250,6 +308,7 @@ class TowerClash(ShowBase):
                 )
                 if result.getNumContacts() > 0:
                     # print('ground', block.getName())
+                    block.node().friction = 1
                     block.state = BlockState.GROUNDED
 
         for i, j in itertools.product(range(5), range(3)):
@@ -262,18 +321,21 @@ class TowerClash(ShowBase):
                     # print('stop', block.getName())
                     block.state = BlockState.STOPPED
 
+        
 
-                for contact in result.getContacts():
-                    mp = contact.getManifoldPoint()
-                    pt = mp.getPositionWorldOnA()
-                    # if not (-50 <= pt.x <= 60 and -50 <= pt.y <= 60):  
-                    if pt.x < -50 or pt.x > 48 or pt.y < -50 or pt.y > 48:
-                        print(pt)
-                        block.state = BlockState.DELETED
-                        block.node().setStatic(True)
-                        # print('delete', block.getName())
-                        # block.removeNode()
-                        # block.state = BlockState.DELETED
+
+
+                # for contact in result.getContacts():
+                #     mp = contact.getManifoldPoint()
+                #     pt = mp.getPositionWorldOnA()
+                #     # if not (-50 <= pt.x <= 60 and -50 <= pt.y <= 60):  
+                #     if pt.x < -50 or pt.x > 48 or pt.y < -50 or pt.y > 48:
+                #         print(pt)
+                #         block.state = BlockState.DELETED
+                #         # block.node().setStatic(True)
+                #         print('delete', block.getName())
+                #         block.removeNode()
+                #         block.state = BlockState.DELETED
 
         self.physical_world.doPhysics(dt)
         return task.cont
