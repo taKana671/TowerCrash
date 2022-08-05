@@ -48,8 +48,8 @@ class Bubbles(NodePath):
 
     def get_sequence(self):
         return Sequence(
-          Parallel(*[seq for seq in self.create_seq()]),
-          Func(lambda: self.removeNode())  
+            Parallel(*(seq for seq in self.create_seq())),
+            Func(lambda: self.removeNode())
         )
 
 

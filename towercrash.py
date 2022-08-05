@@ -28,7 +28,7 @@ PATH_CYLINDER = "models/cylinder/cylinder"
 # PATH_CYLINDER = "models/alice-shapes--box/box"
 
 
-class BlockState(Enum):
+class State(Enum):
 
     ACTIVE = auto()
     STAY = auto()
@@ -77,23 +77,22 @@ class CylinderTower:
 
     def __init__(self, center, stories, foundation):
         self.root = NodePath(PandaNode('cylinderTower'))
+        self.root.reparentTo(base.render)
         self.center = center  # Point3(-2, 12, 0.3)
         self.stories = stories
         self.foundation = foundation
         self.axis = Vec3.up()
-        self.root.reparentTo(base.render)
+        self.blocks = Blocks(3, self.stories)
+        self.tower_top = self.stories - 1
+        self.inactive_top = int(self.stories * 2 / 3) - 1
 
     def get_attrib(self, i):
-        if i <= self.stories * 2 / 3:
-            return LColor(0.25, 0.25, 0.25, 1), BlockState.STAY
+        if i <= self.inactive_top:
+            return LColor(0.25, 0.25, 0.25, 1), State.STAY
         else:
-            return Colors.select(), BlockState.ACTIVE
+            return Colors.select(), State.ACTIVE
 
     def build(self, physical_world):
-        self.blocks = Blocks(3, self.stories)
-        
-        self.top = self.stories - 1
-        
         edge = 1.5                     # the length of one side
         ok = edge / 2 / math.sqrt(3)   # the length of line OK, O: center of triangle 
         height = 2.5
@@ -109,6 +108,10 @@ class CylinderTower:
                 color, state = self.get_attrib(i)
                 cylinder = Cylinder(self.root, pt + self.center, str(i * 3 + j), color, state)
                 physical_world.attachRigidBody(cylinder.node())
+
+                if state == State.STAY:
+                    cylinder.node().setMass(0)
+
                 self.blocks.data[i][j] = cylinder
 
     def rotate_around(self, angle):
@@ -117,25 +120,24 @@ class CylinderTower:
         q.setFromAxisAngle(angle, self.axis.normalized())
 
         for block in self.blocks:
-            if block.state in {BlockState.ACTIVE, BlockState.STAY}:
+            if block.state in {State.ACTIVE, State.STAY}:
                 r = q.xform(block.getPos() - self.center)
                 pos = self.center + r
                 block.setPos(pos)
 
     def set_active(self):
-        top = self.top
-        for i in range(self.top, self.top - 8, -1):
-            if all(True if block.state not in {BlockState.ACTIVE, BlockState.STAY} else False for block in self.blocks(i)):
-                print('called!!')
-                for block in self.blocks(16):
-                    # import pdb; pdb.set_trace()
-                    block.state = BlockState.ACTIVE
+        if self.inactive_top > 0:
+            # print(all(block.is_dropping() for block in self.blocks(self.tower_top)))
+            if all(block.is_dropping() for block in self.blocks(self.tower_top)):
+                for block in self.blocks(self.inactive_top):
+                    block.state = State.ACTIVE
                     block.clearColor()
                     block.setColor(Colors.select())
                     block.node().setMass(1)
-                    # block.node().forceActive(True)
-                top -= 1
-        self.top = top
+                self.tower_top -= 1
+                self.inactive_top -= 1
+
+                return True
 
 
 class Cylinder(NodePath):
@@ -143,17 +145,22 @@ class Cylinder(NodePath):
     def __init__(self, root, pos, name, color, state):
         super().__init__(BulletRigidBodyNode(name))
         self.reparentTo(root)
-        self.state = state
         cylinder = base.loader.loadModel(PATH_CYLINDER)
         cylinder.reparentTo(self)
         end, tip = cylinder.getTightBounds()
         self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2))
         self.node().addShape(BulletCylinderShape((tip - end) / 2))
-        if self.state == BlockState.ACTIVE:
-            self.node().setMass(1)
+        self.node().setMass(1)
         self.setScale(0.7)
         self.setColor(color)
         self.setPos(pos)
+
+        self.state = state
+        self.origianl_pos = pos
+
+    def is_dropping(self):
+        # print(self.getName(), 'oritinal: ', self.origianl_pos.z, 'dropping: ', self.getZ(), self.origianl_pos.z - self.getZ() > 2)
+        return abs(self.origianl_pos.z - self.getZ()) > 0.5
 
     def move(self, pos):
         self.node().setActive(True)
@@ -195,10 +202,10 @@ class TowerCrash(ShowBase):
     def __init__(self):
         super().__init__()
         self.disableMouse()
-        self.camera.setPos(20, -18, 10)  # 20, -20, 5
+        self.camera.setPos(20, -18, 0)  # 20, -20, 5
         # self.camera.setHpr(0, -80, 0)
-        self.camera.lookAt(Point3(-2, 12, 0.3))
         self.camera.lookAt(5, 3, 5)  # 5, 0, 3
+        # self.camera.lookAt(Point3(-2, 12, 1.0))
 
         self.setup_lights()
         self.setup_click_detection()
@@ -208,9 +215,12 @@ class TowerCrash(ShowBase):
         self.scene = Scene()
         self.scene.setup(self.physical_world)
         self.create_tower()
-        self.camera.setPos(20, -18, 55)
+        # self.camera.setPos(20, -18, 55)
+        self.camera.setPos((20, -18, (self.tower.inactive_top + 3) * 2.5))
+        # self.camera.lookAt(5, 3, 5)
 
-        self.ball = Ball(Point3(6, 0, 50))
+        # self.ball_pos = Point3(6, 0, 50)
+        self.ball = Ball(Point3(6, 0, 45))
         self.ball.setup()
 
         self.dragging_duration = 0
@@ -267,7 +277,7 @@ class TowerCrash(ShowBase):
                 clicked_pos = result.getHitPos()
 
                 block = self.tower.blocks.get_from_node_name(node_name)
-                if block.state == BlockState.ACTIVE:
+                if block.state == State.ACTIVE:
                     self.ball.move(clicked_pos, block)
 
                 print('node_name', node_name)
@@ -282,6 +292,7 @@ class TowerCrash(ShowBase):
     def update(self, task):
         dt = globalClock.getDt()
         velocity = 0
+        distance = 0
 
         if self.dragging_duration:
             mouse_x = self.mouseWatcherNode.getMouse().getX()
@@ -296,38 +307,29 @@ class TowerCrash(ShowBase):
             self.tower.rotate_around(velocity * dt)
 
         for block in self.tower.blocks:
-            if block.state == BlockState.ACTIVE:
+            if block.state == State.ACTIVE:
                 result = self.physical_world.contactTestPair(
                     self.scene.ground.node(), block.node()
                 )
                 if result.getNumContacts() > 0:
                     # print('ground', block.getName())
-                    block.state = BlockState.GROUNDED
+                    block.state = State.GROUNDED
 
         for block in self.tower.blocks:
-            if block.state == BlockState.GROUNDED:
+            if block.state == State.GROUNDED:
                 result = self.physical_world.contactTestPair(
                     self.scene.ground.node(), block.node()
                 )
 
                 if result.getNumContacts() == 0:
                     # print('stop', block.getName())
-                    block.state = BlockState.STOPPED
+                    block.state = State.STOPPED
 
-                # for contact in result.getContacts():
-                #     mp = contact.getManifoldPoint()
-                #     pt = mp.getPositionWorldOnA()
-                #     # if not (-50 <= pt.x <= 60 and -50 <= pt.y <= 60):  
-                #     if pt.x < -50 or pt.x > 48 or pt.y < -50 or pt.y > 48:
-                #         print(pt)
-                #         block.state = BlockState.DELETED
-                #         # block.node().setStatic(True)
-                #         print('delete', block.getName())
-                #         block.removeNode()
-                #         block.state = BlockState.DELETED
-
-        self.tower.set_active()
-
+        if self.tower.set_active():
+            distance += 2.5
+            self.camera.setPos(self.camera.getPos() - (0, 0, distance))
+        
+        
         self.physical_world.doPhysics(dt)
         return task.cont
 
