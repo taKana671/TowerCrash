@@ -56,20 +56,21 @@ class Blocks:
     def __init__(self, cols, rows):
         self.cols = cols
         self.rows = rows
-        self.blocks = [[None for _ in range(cols)] for _ in range(rows)]
+        self.data = [[None for _ in range(cols)] for _ in range(rows)]
 
     def __iter__(self):
         for i, j in itertools.product(range(self.rows), range(self.cols)):
-            yield self.blocks[i][j]
+            yield self.data[i][j]
 
-    def __call__(self, i, j, item):
-        self.blocks[i][j] = item
+    def __call__(self, i):
+        for block in self.data[i]:
+            yield block
 
     def get_from_node_name(self, node_name):
         j = int(node_name) % 3
         i = int(node_name) // 3
 
-        return self.blocks[i][j]
+        return self.data[i][j]
 
 
 class CylinderTower:
@@ -90,6 +91,9 @@ class CylinderTower:
 
     def build(self, physical_world):
         self.blocks = Blocks(3, self.stories)
+        
+        self.top = self.stories - 1
+        
         edge = 1.5                     # the length of one side
         ok = edge / 2 / math.sqrt(3)   # the length of line OK, O: center of triangle 
         height = 2.5
@@ -105,7 +109,7 @@ class CylinderTower:
                 color, state = self.get_attrib(i)
                 cylinder = Cylinder(self.root, pt + self.center, str(i * 3 + j), color, state)
                 physical_world.attachRigidBody(cylinder.node())
-                self.blocks(i, j, cylinder)
+                self.blocks.data[i][j] = cylinder
 
     def rotate_around(self, angle):
         self.foundation.setH(self.foundation.getH() + angle)
@@ -117,6 +121,21 @@ class CylinderTower:
                 r = q.xform(block.getPos() - self.center)
                 pos = self.center + r
                 block.setPos(pos)
+
+    def set_active(self):
+        top = self.top
+        for i in range(self.top, self.top - 8, -1):
+            if all(True if block.state not in {BlockState.ACTIVE, BlockState.STAY} else False for block in self.blocks(i)):
+                print('called!!')
+                for block in self.blocks(16):
+                    # import pdb; pdb.set_trace()
+                    block.state = BlockState.ACTIVE
+                    block.clearColor()
+                    block.setColor(Colors.select())
+                    block.node().setMass(1)
+                    # block.node().forceActive(True)
+                top -= 1
+        self.top = top
 
 
 class Cylinder(NodePath):
@@ -158,7 +177,7 @@ class Ball(NodePath):
 
     def move(self, clicked_pos, block):
         bubbles = Bubbles(self.getColor(), clicked_pos)
-        para = Parallel(Func(lambda: bubbles.start()))
+        para = Parallel(bubbles.get_sequence())
 
         if block.getColor() == self.getColor():
             para.append(Func(lambda: block.move(clicked_pos)))
@@ -189,7 +208,7 @@ class TowerCrash(ShowBase):
         self.scene = Scene()
         self.scene.setup(self.physical_world)
         self.create_tower()
-        self.camera.setPos(20, -18, 60)
+        self.camera.setPos(20, -18, 55)
 
         self.ball = Ball(Point3(6, 0, 50))
         self.ball.setup()
@@ -306,6 +325,8 @@ class TowerCrash(ShowBase):
                 #         print('delete', block.getName())
                 #         block.removeNode()
                 #         block.state = BlockState.DELETED
+
+        self.tower.set_active()
 
         self.physical_world.doPhysics(dt)
         return task.cont

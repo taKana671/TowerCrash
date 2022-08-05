@@ -1,6 +1,8 @@
+import random
+
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import PandaNode, NodePath
-
+from panda3d.core import Vec3, Point3
 from direct.interval.IntervalGlobal import Sequence, Parallel, Func
 
 
@@ -14,40 +16,41 @@ class Bubbles(NodePath):
         self.reparentTo(base.render)
         self.pos = pos
         self.color = color
+        self.numbers = [n for n in range(-3, 4) if n != 0]
 
-    def create_bubbles(self):
-        for _ in range(5):
-            bubble = base.loader.loadModel(PATH_BUBBLE)
-            bubble.reparentTo(self)
-            bubble.setPos(self.pos)
-            bubble.setColor(self.color)
-            bubble.setScale(0.01)
-            yield bubble
+    def create_bubble(self, name):
+        bubble = base.loader.loadModel(PATH_BUBBLE)
+        bubble.reparentTo(self)
+        bubble.setPos(self.pos)
+        bubble.setColor(self.color)
+        bubble.setScale(0.01)
 
-    def create_seq(self, bub, delta1, delta2):
+        return bubble
+
+    def calc_delta(self):
+        x = random.choice(self.numbers)
+        y = -abs(random.choice(self.numbers))
+        z = abs(random.choice(self.numbers))
+        d1 = Vec3(x, y, z)
+        d2 = Vec3(d1.x * 2, d1.y * 2, -d1.z)
+
+        return d1, d2
+
+    def create_seq(self):
+        for i in range(8):
+            bub = self.create_bubble(i)
+            delta1, delta2 = self.calc_delta()
+
+            yield Sequence(
+                bub.posHprScaleInterval(0.5, bub.getPos() + delta1, bub.getHpr(), 0.1),
+                bub.posHprScaleInterval(0.5, bub.getPos() + delta2, bub.getHpr(), 0.01),
+            )
+
+    def get_sequence(self):
         return Sequence(
-            bub.posHprScaleInterval(0.5, bub.getPos() + delta1, bub.getHpr(), 0.1),
-            bub.posHprScaleInterval(0.5, bub.getPos() + delta2, bub.getHpr(), 0.01),
-            Func(lambda: bub.removeNode())
+          Parallel(*[seq for seq in self.create_seq()]),
+          Func(lambda: self.removeNode())  
         )
-
-    def start(self):
-        deltas = [
-            [(0, -2, 1), (0, -2, -2)],
-            [(1, -2, 1), (2, -2, -1)],
-            [(0, -3, 1), (0, -4, -1)],
-            [(-1, -2, 1), (-2, -2, -1)],
-            [(0, -3, 2), (0, -4, -1)]
-        ]
-        # deltas = [
-        #     [(0, 0, 1), (0, 0, -1)],
-        #     [(1, 0, 1), (2, 0, -1)],
-        #     [(0, 1, 1), (0, 2, -1)],
-        #     [(-1, 0, 1), (-2, 0, -1)],
-        #     [(0, -1, 1), (0, -2, -1)]
-        # ]
-        self.bubbles = [bub for bub in self.create_bubbles()]
-        Parallel(*[self.create_seq(bub, *delta) for bub, delta in zip(self.bubbles, deltas)]).start()
 
 
 if __name__ == '__main__':
@@ -60,6 +63,6 @@ if __name__ == '__main__':
     base.camera.setPos(20, -18, 20)  # 20, -20, 5
     base.camera.setP(-80)
     base.camera.lookAt(5, 3, 5)  # 5, 0, 3
-    bubbles = Bubbles()
+    bubbles = Bubbles((1, 0, 0, 1), Point3(-2, 12, 1.0))
     bubbles.start()
     base.run()
