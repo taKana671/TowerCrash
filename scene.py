@@ -57,7 +57,7 @@ class Ground(NodePath):
         size = 2
         half = size / 2
         card.setFrame(-half, half, -half, half)
-        max_card = 50
+        max_card = 60
 
         for y in range(max_card):
             for x in range(max_card):

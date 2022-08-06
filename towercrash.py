@@ -22,6 +22,7 @@ from panda3d.core import WindowProperties
 
 from bubble import Bubbles
 from scene import Scene
+from window import Window
 
 
 PATH_CYLINDER = "models/cylinder/cylinder"
@@ -66,6 +67,9 @@ class Blocks:
         for block in self.data[i]:
             yield block
 
+    def __len__(self):
+        return len(self.data)
+
     def get_from_node_name(self, node_name):
         j = int(node_name) % 3
         i = int(node_name) // 3
@@ -78,13 +82,14 @@ class CylinderTower:
     def __init__(self, center, stories, foundation):
         self.root = NodePath(PandaNode('cylinderTower'))
         self.root.reparentTo(base.render)
+
         self.center = center  # Point3(-2, 12, 0.3)
-        self.stories = stories
         self.foundation = foundation
+        self.blocks = Blocks(3, stories)
         self.axis = Vec3.up()
-        self.blocks = Blocks(3, self.stories)
-        self.tower_top = self.stories - 1
-        self.inactive_top = int(self.stories * 2 / 3) - 1
+        self.tower_top = stories - 1
+        self.inactive_top = int(stories * 2 / 3) - 1
+        self.block_h = 2.5
 
     def get_attrib(self, i):
         if i <= self.inactive_top:
@@ -95,10 +100,9 @@ class CylinderTower:
     def build(self, physical_world):
         edge = 1.5                     # the length of one side
         ok = edge / 2 / math.sqrt(3)   # the length of line OK, O: center of triangle 
-        height = 2.5
 
-        for i in range(self.stories):
-            h = height * (i + 1)
+        for i in range(len(self.blocks)):
+            h = self.block_h * (i + 1)
             if i % 2 == 0:
                 points = [Point3(edge / 2, -ok, h), Point3(-edge / 2, -ok, h), Point3(0, ok * 2, h)]
             else:
@@ -126,9 +130,9 @@ class CylinderTower:
                 block.setPos(pos)
 
     def set_active(self):
-        if self.inactive_top > 0:
-            # print(all(block.is_dropping() for block in self.blocks(self.tower_top)))
-            if all(block.is_dropping() for block in self.blocks(self.tower_top)):
+        cnt = 0
+        for i in range(self.tower_top, -1, -1):
+            if all(block.is_dropping() for block in self.blocks(i)):
                 for block in self.blocks(self.inactive_top):
                     block.state = State.ACTIVE
                     block.clearColor()
@@ -136,8 +140,10 @@ class CylinderTower:
                     block.node().setMass(1)
                 self.tower_top -= 1
                 self.inactive_top -= 1
-
-                return True
+                cnt += 1
+                continue
+            break
+        return cnt
 
 
 class Cylinder(NodePath):
@@ -159,7 +165,6 @@ class Cylinder(NodePath):
         self.origianl_pos = pos
 
     def is_dropping(self):
-        # print(self.getName(), 'oritinal: ', self.origianl_pos.z, 'dropping: ', self.getZ(), self.origianl_pos.z - self.getZ() > 2)
         return abs(self.origianl_pos.z - self.getZ()) > 0.5
 
     def move(self, pos):
@@ -202,10 +207,9 @@ class TowerCrash(ShowBase):
     def __init__(self):
         super().__init__()
         self.disableMouse()
-        self.camera.setPos(20, -18, 0)  # 20, -20, 5
-        # self.camera.setHpr(0, -80, 0)
-        self.camera.lookAt(5, 3, 5)  # 5, 0, 3
-        # self.camera.lookAt(Point3(-2, 12, 1.0))
+        self.camera.setPos(10, -40, 10)  # 20, -18, 5
+        # self.camera.lookAt(5, 3, 5)  # 5, 0, 3
+        self.camera.lookAt(Point3(-2, 12, 10)) #10
 
         self.setup_lights()
         self.setup_click_detection()
@@ -216,11 +220,16 @@ class TowerCrash(ShowBase):
         self.scene.setup(self.physical_world)
         self.create_tower()
         # self.camera.setPos(20, -18, 55)
-        self.camera.setPos((20, -18, (self.tower.inactive_top + 3) * 2.5))
-        # self.camera.lookAt(5, 3, 5)
 
-        # self.ball_pos = Point3(6, 0, 50)
-        self.ball = Ball(Point3(6, 0, 45))
+        camera_z = (self.tower.inactive_top + 1) * 2.5
+        look_z = camera_z + 4 * 2.5
+        self.camera.setPos(Point3(10, -40, camera_z))
+        self.camera.lookAt(Point3(-2, 12, look_z))
+
+
+        # self.ball = Ball(Point3(6, 0, 40))
+        ball_z = self.tower.inactive_top * 2.5 + 1
+        self.ball = Ball(Point3(5.5, -21, ball_z))  # 40
         self.ball.setup()
 
         self.dragging_duration = 0
@@ -292,7 +301,6 @@ class TowerCrash(ShowBase):
     def update(self, task):
         dt = globalClock.getDt()
         velocity = 0
-        distance = 0
 
         if self.dragging_duration:
             mouse_x = self.mouseWatcherNode.getMouse().getX()
@@ -325,10 +333,22 @@ class TowerCrash(ShowBase):
                     # print('stop', block.getName())
                     block.state = State.STOPPED
 
-        if self.tower.set_active():
-            distance += 2.5
-            self.camera.setPos(self.camera.getPos() - (0, 0, distance))
-        
+        if cnt := self.tower.set_active():
+            if self.camera.getZ() > 0:
+                camera_z = (self.tower.inactive_top + 1) * 2.5
+                if camera_z >= 5:
+                    look_z = camera_z + 4 * 2.5
+                    self.camera.setPos(Point3(10, -40, camera_z))
+                    self.camera.lookAt(Point3(-2, 12, look_z))
+
+                    ball_z = self.tower.inactive_top * 2.5 + 1
+                    self.ball.pos = Point3(5.5, -21, ball_z)
+                    # self.ball = Ball(Point3(5.5, -21, ball_z))
+                else:
+                    self.camera.setPos(10, -40, 10)  # 20, -18, 5
+                    # self.camera.lookAt(5, 3, 5)  # 5, 0, 3
+                    self.camera.lookAt(Point3(-2, 12, 10))
+
         
         self.physical_world.doPhysics(dt)
         return task.cont
