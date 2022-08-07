@@ -16,17 +16,12 @@ from panda3d.bullet import BulletWorld, BulletRigidBodyNode
 from panda3d.core import TextNode, PandaNode, NodePath
 from panda3d.core import Quat, Vec3, LColor, BitMask32, Point3
 from panda3d.core import AmbientLight, DirectionalLight
-from panda3d.core import CollisionTraverser, CollisionNode
-from panda3d.core import CollisionHandlerQueue, CollisionRay
-from panda3d.core import WindowProperties
 
 from bubble import Bubbles
 from scene import Scene
-from window import Window
 
 
 PATH_CYLINDER = "models/cylinder/cylinder"
-# PATH_CYLINDER = "models/alice-shapes--box/box"
 
 
 class State(Enum):
@@ -36,6 +31,9 @@ class State(Enum):
     GROUNDED = auto()
     DELETED = auto()
     STOPPED = auto()
+
+    READY = auto()
+    MOVE = auto()
 
 
 class Colors(Enum):
@@ -131,18 +129,22 @@ class CylinderTower:
 
     def set_active(self):
         cnt = 0
-        for i in range(self.tower_top, -1, -1):
-            if all(block.is_dropping() for block in self.blocks(i)):
-                for block in self.blocks(self.inactive_top):
-                    block.state = State.ACTIVE
-                    block.clearColor()
-                    block.setColor(Colors.select())
-                    block.node().setMass(1)
-                self.tower_top -= 1
-                self.inactive_top -= 1
-                cnt += 1
-                continue
-            break
+
+        if self.tower_top >= 8:
+
+            for i in range(self.tower_top, -1, -1):
+                if all(block.is_dropping() for block in self.blocks(i)):
+                    for block in self.blocks(self.inactive_top):
+                        block.state = State.ACTIVE
+                        block.clearColor()
+                        block.setColor(Colors.select())
+                        block.node().setMass(1)
+                    self.tower_top -= 1
+                    self.inactive_top -= 1
+                    cnt += 1
+                    continue
+                break
+
         return cnt
 
 
@@ -175,17 +177,23 @@ class Cylinder(NodePath):
 
 class Ball(NodePath):
 
-    def __init__(self, pos):
+    def __init__(self):
         super().__init__(PandaNode('ball'))
         ball = base.loader.loadModel('models/sphere/sphere')
         ball.reparentTo(self)
         self.setScale(0.2)
-        self.pos = pos
+        self.state = None
 
-    def setup(self):
-        self.setPos(self.pos)
+    def setup(self, camera_z):
+        pos = Point3(5.5, -21, camera_z - 1.5)
+        self.setPos(pos)
         self.setColor(Colors.select())
         self.reparentTo(base.render)
+        self.state = State.READY
+
+    def _delete(self):
+        self.detachNode()
+        self.state = State.DELETED
 
     def move(self, clicked_pos, block):
         bubbles = Bubbles(self.getColor(), clicked_pos)
@@ -196,9 +204,8 @@ class Ball(NodePath):
 
         Sequence(
             self.posInterval(0.5, clicked_pos),
-            Func(lambda: self.detachNode()),
-            para,
-            Func(lambda: self.setup())
+            Func(self._delete),
+            para
         ).start()
 
 
@@ -212,7 +219,6 @@ class TowerCrash(ShowBase):
         self.camera.lookAt(Point3(-2, 12, 10)) #10
 
         self.setup_lights()
-        self.setup_click_detection()
         self.physical_world = BulletWorld()
         self.physical_world.setGravity(Vec3(0, 0, -9.81))
 
@@ -225,12 +231,10 @@ class TowerCrash(ShowBase):
         look_z = camera_z + 4 * 2.5
         self.camera.setPos(Point3(10, -40, camera_z))
         self.camera.lookAt(Point3(-2, 12, look_z))
+        self.camera_move_distance = 0
 
-
-        # self.ball = Ball(Point3(6, 0, 40))
-        ball_z = self.tower.inactive_top * 2.5 + 1
-        self.ball = Ball(Point3(5.5, -21, ball_z))  # 40
-        self.ball.setup()
+        self.ball = Ball()
+        self.ball.setup(self.camera.getZ())
 
         self.dragging_duration = 0
         self.max_duration = 5
@@ -243,17 +247,6 @@ class TowerCrash(ShowBase):
         center = Point3(-2, 12, 1.0)
         self.tower = CylinderTower(center, 24, self.scene.foundation)
         self.tower.build(self.physical_world)
-
-    def setup_click_detection(self):
-        self.picker = CollisionTraverser()
-        self.handler = CollisionHandlerQueue()
-
-        self.picker_node = CollisionNode('mouseRay')
-        self.picker_np = self.camera.attachNewNode(self.picker_node)
-        self.picker_node.setFromCollideMask(BitMask32.bit(1))
-        self.picker_ray = CollisionRay()
-        self.picker_node.addSolid(self.picker_ray)
-        self.picker.addCollider(self.picker_np, self.handler)
 
     def setup_lights(self):
         ambient_light = self.render.attachNewNode(AmbientLight('ambientLight'))
@@ -287,6 +280,7 @@ class TowerCrash(ShowBase):
 
                 block = self.tower.blocks.get_from_node_name(node_name)
                 if block.state == State.ACTIVE:
+                    self.ball.state = State.MOVE
                     self.ball.move(clicked_pos, block)
 
                 print('node_name', node_name)
@@ -330,26 +324,25 @@ class TowerCrash(ShowBase):
                 )
 
                 if result.getNumContacts() == 0:
-                    # print('stop', block.getName())
+
                     block.state = State.STOPPED
 
+        if self.ball.state == State.DELETED:
+            self.ball.setup(self.camera.getZ())
+
+        distance = 0
         if cnt := self.tower.set_active():
-            if self.camera.getZ() > 0:
-                camera_z = (self.tower.inactive_top + 1) * 2.5
-                if camera_z >= 5:
-                    look_z = camera_z + 4 * 2.5
-                    self.camera.setPos(Point3(10, -40, camera_z))
-                    self.camera.lookAt(Point3(-2, 12, look_z))
+            self.camera_move_distance += cnt * 2.5
 
-                    ball_z = self.tower.inactive_top * 2.5 + 1
-                    self.ball.pos = Point3(5.5, -21, ball_z)
-                    # self.ball = Ball(Point3(5.5, -21, ball_z))
-                else:
-                    self.camera.setPos(10, -40, 10)  # 20, -18, 5
-                    # self.camera.lookAt(5, 3, 5)  # 5, 0, 3
-                    self.camera.lookAt(Point3(-2, 12, 10))
+        if self.camera_move_distance > 0:
+            if self.camera.getZ() > 2.5:
+                distance += 10
+                self.camera_move_distance -= distance * dt
+                self.camera.setZ(self.camera.getZ() - distance * dt)
 
-        
+                if self.ball.state == State.READY:
+                    self.ball.setZ(self.ball.getZ() - distance * dt)
+
         self.physical_world.doPhysics(dt)
         return task.cont
 
