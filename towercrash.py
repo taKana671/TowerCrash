@@ -131,7 +131,6 @@ class CylinderTower:
         cnt = 0
 
         if self.tower_top >= 8:
-
             for i in range(self.tower_top, -1, -1):
                 if all(block.is_dropping() for block in self.blocks(i)):
                     for block in self.blocks(self.inactive_top):
@@ -183,6 +182,7 @@ class Ball(NodePath):
         ball.reparentTo(self)
         self.setScale(0.2)
         self.state = None
+        self.bubbles = Bubbles()
 
     def setup(self, camera_z):
         pos = Point3(5.5, -21, camera_z - 1.5)
@@ -195,17 +195,19 @@ class Ball(NodePath):
         self.detachNode()
         self.state = State.DELETED
 
-    def move(self, clicked_pos, block):
-        bubbles = Bubbles(self.getColor(), clicked_pos)
-        para = Parallel(bubbles.get_sequence())
+    def _hit(self, clicked_pos, block):
+        para = Parallel(self.bubbles.get_sequence(self.getColor(), clicked_pos))
 
         if block.getColor() == self.getColor():
             para.append(Func(lambda: block.move(clicked_pos)))
-
+        
+        para.start()
+        
+    def move(self, clicked_pos, block):
         Sequence(
             self.posInterval(0.5, clicked_pos),
             Func(self._delete),
-            para
+            Func(self._hit, clicked_pos, block)
         ).start()
 
 
