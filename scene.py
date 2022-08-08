@@ -2,7 +2,7 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.bullet import BulletRigidBodyNode
 from panda3d.bullet import BulletPlaneShape, BulletCylinderShape, BulletBoxShape
 from panda3d.core import Vec3, Point3, BitMask32
-from panda3d.core import PandaNode, NodePath, CardMaker
+from panda3d.core import PandaNode, NodePath, CardMaker, TransparencyAttrib
 
 
 PATH_GROUND = 'textures/ground.jpg'
@@ -106,31 +106,68 @@ class Plant(NodePath):
             yield np
 
 
+class Ground2(NodePath):
+
+    def __init__(self):
+        super().__init__(BulletRigidBodyNode('ground'))
+        self.reparentTo(base.render)
+        self.setCollideMask(BitMask32.bit(2))
+        self.node().addShape(BulletPlaneShape(Vec3.up(), 0))
+
+       
+class Sea(NodePath):
+
+    def __init__(self):
+        super().__init__(PandaNode('sea'))
+        self.reparentTo(base.render)
+        sea = base.loader.loadModel('models/bump/bump')
+
+        # sea = base.loader.loadModel('models/halfcylinder/halfcylinder')
+        sea.reparentTo(self)
+        self.setScale(12)
+        self.setPos(-2, 0, 0.5)
+        # self.setPos(3, 5, 0.5)
+
+        self.setTransparency(TransparencyAttrib.M_alpha)
+        # self.setColor((0.52, 0.8, 0.92, 0.5))
+        # self.setColor((0.11, 0.56, 1, 0.3))
+        self.setColor((0.25, 0.41, 1, 0.3))
+        self.setR(180)
+        self.setH(15)
+
+
+
+
+
+
 class Scene:
 
     def __init__(self):
         self.sky = Sky()
-        self.ground = Ground()
+        self.sea = Sea()
+        # self.ground = Ground()
+        self.ground = Ground2()
         self.foundation = Foundation()
-        self.plant = Plant()
+
+        # self.plant = Plant()
 
     def setup(self, physical_world):
         physical_world.attachRigidBody(self.ground.node())
         physical_world.attachRigidBody(self.foundation.node())
 
-        for plant in self.plant.plants:
-            physical_world.attachRigidBody(plant.node())
+        # for plant in self.plant.plants:
+        #     physical_world.attachRigidBody(plant.node())
 
 
 if __name__ == '__main__':
-    from window import Window
+    # from window import Window
     base = ShowBase()
     # Window('game')
     # base.setBackgroundColor(0.5, 0.8, 1)
     base.disableMouse()
-
-    base.camera.setPos(20, -18, 20)  # 20, -20, 5
-    base.camera.setP(-80)
-    base.camera.lookAt(5, 3, 5)  # 5, 0, 3
+    base.camera.setPos(10, -40, 10)  # 20, -20, 5
+    # base.camera.setP(-80)
+    base.camera.lookAt(-2, 12, 10)  # 5, 0, 3
+    # dome = Sea()
     scene = Scene()
     base.run()

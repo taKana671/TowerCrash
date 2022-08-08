@@ -28,12 +28,14 @@ class State(Enum):
 
     ACTIVE = auto()
     STAY = auto()
-    GROUNDED = auto()
-    DELETED = auto()
-    STOPPED = auto()
+    DROPPED = auto()
 
+    DELETED = auto()
     READY = auto()
     MOVE = auto()
+
+
+GRAY = LColor(0.25, 0.25, 0.25, 1)
 
 
 class Colors(Enum):
@@ -68,7 +70,7 @@ class Blocks:
     def __len__(self):
         return len(self.data)
 
-    def get_from_node_name(self, node_name):
+    def find(self, node_name):
         j = int(node_name) % 3
         i = int(node_name) // 3
 
@@ -91,13 +93,13 @@ class CylinderTower:
 
     def get_attrib(self, i):
         if i <= self.inactive_top:
-            return LColor(0.25, 0.25, 0.25, 1), State.STAY
+            return GRAY, State.STAY
         else:
             return Colors.select(), State.ACTIVE
 
     def build(self, physical_world):
         edge = 1.5                     # the length of one side
-        ok = edge / 2 / math.sqrt(3)   # the length of line OK, O: center of triangle 
+        ok = edge / 2 / math.sqrt(3)   # the length of line OK, O: center of triangle
 
         for i in range(len(self.blocks)):
             h = self.block_h * (i + 1)
@@ -111,9 +113,8 @@ class CylinderTower:
                 cylinder = Cylinder(self.root, pt + self.center, str(i * 3 + j), color, state)
                 physical_world.attachRigidBody(cylinder.node())
 
-                if state == State.STAY:
+                if state == state.STAY:
                     cylinder.node().setMass(0)
-
                 self.blocks.data[i][j] = cylinder
 
     def rotate_around(self, angle):
@@ -132,7 +133,7 @@ class CylinderTower:
 
         if self.tower_top >= 8:
             for i in range(self.tower_top, -1, -1):
-                if all(block.is_dropping() for block in self.blocks(i)):
+                if all(block.is_collapsed() for block in self.blocks(i)):
                     for block in self.blocks(self.inactive_top):
                         block.state = State.ACTIVE
                         block.clearColor()
@@ -165,7 +166,7 @@ class Cylinder(NodePath):
         self.state = state
         self.origianl_pos = pos
 
-    def is_dropping(self):
+    def is_collapsed(self):
         return abs(self.origianl_pos.z - self.getZ()) > 0.5
 
     def move(self, pos):
@@ -200,9 +201,9 @@ class Ball(NodePath):
 
         if block.getColor() == self.getColor():
             para.append(Func(lambda: block.move(clicked_pos)))
-        
+
         para.start()
-        
+
     def move(self, clicked_pos, block):
         Sequence(
             self.posInterval(0.5, clicked_pos),
@@ -217,6 +218,7 @@ class TowerCrash(ShowBase):
         super().__init__()
         self.disableMouse()
         self.camera.setPos(10, -40, 10)  # 20, -18, 5
+        self.camera.setP(10)
         # self.camera.lookAt(5, 3, 5)  # 5, 0, 3
         self.camera.lookAt(Point3(-2, 12, 10)) #10
 
@@ -280,8 +282,7 @@ class TowerCrash(ShowBase):
                 node_name = result.getNode().getName()
                 clicked_pos = result.getHitPos()
 
-                block = self.tower.blocks.get_from_node_name(node_name)
-                if block.state == State.ACTIVE:
+                if (block := self.tower.blocks.find(node_name)).state == State.ACTIVE:
                     self.ball.state = State.MOVE
                     self.ball.move(clicked_pos, block)
 
@@ -316,18 +317,7 @@ class TowerCrash(ShowBase):
                     self.scene.ground.node(), block.node()
                 )
                 if result.getNumContacts() > 0:
-                    # print('ground', block.getName())
-                    block.state = State.GROUNDED
-
-        for block in self.tower.blocks:
-            if block.state == State.GROUNDED:
-                result = self.physical_world.contactTestPair(
-                    self.scene.ground.node(), block.node()
-                )
-
-                if result.getNumContacts() == 0:
-
-                    block.state = State.STOPPED
+                    block.state = State.DROPPED
 
         if self.ball.state == State.DELETED:
             self.ball.setup(self.camera.getZ())
