@@ -1,7 +1,7 @@
 import itertools
 import math
 import random
-from enum import Enum, auto
+from enum import Enum, Flag, auto
 
 from direct.gui.DirectGui import OnscreenText, ScreenTitle
 from direct.gui.DirectGui import DirectOptionMenu, DirectLabel, DirectButton
@@ -24,11 +24,17 @@ from scene import Scene
 PATH_CYLINDER = "models/cylinder/cylinder"
 
 
-class State(Enum):
+class State(Flag):
 
     ACTIVE = auto()
-    STAY = auto()
-    DROPPED = auto()
+    INACTIVE = auto()
+    INWATER = auto()
+    ONSTONE = auto()
+    DROPPING = auto()
+
+    ROTATABLE = ACTIVE | INACTIVE | ONSTONE
+    TARGET = ACTIVE | ONSTONE | DROPPING
+    DROPPED = ONSTONE | DROPPING
 
     DELETED = auto()
     READY = auto()
@@ -93,7 +99,7 @@ class CylinderTower:
 
     def get_attrib(self, i):
         if i <= self.inactive_top:
-            return GRAY, State.STAY
+            return GRAY, State.INACTIVE
         else:
             return Colors.select(), State.ACTIVE
 
@@ -113,9 +119,23 @@ class CylinderTower:
                 cylinder = Cylinder(self.root, pt + self.center, str(i * 3 + j), color, state)
                 physical_world.attachRigidBody(cylinder.node())
 
-                if state == state.STAY:
+                if state == state.INACTIVE:
                     cylinder.node().setMass(0)
                 self.blocks.data[i][j] = cylinder
+
+    def calc_distance(self, block):
+        now_pos = block.getPos()
+        dx = block.origianl_pos.x - now_pos.x
+        dy = block.origianl_pos.y - now_pos.y
+        dz = block.origianl_pos.z - now_pos.z
+
+        return (dx ** 2 + dy ** 2 * dz ** 2) ** 0.5
+
+    def is_collapsed(self, block, threshold=1.5):
+        if self.calc_distance(block) > threshold:
+            block.state = State.DROPPING
+            return True
+        return False
 
     def rotate_around(self, angle):
         self.foundation.setH(self.foundation.getH() + angle)
@@ -123,8 +143,7 @@ class CylinderTower:
         q.setFromAxisAngle(angle, self.axis.normalized())
 
         for block in self.blocks:
-            # if block.state in {State.ACTIVE, State.STAY}:
-            if block.state in {State.ACTIVE, State.STAY} and not block.is_dropping:
+            if block.state in State.ROTATABLE:
                 r = q.xform(block.getPos() - self.center)
                 pos = self.center + r
                 block.setPos(pos)
@@ -132,23 +151,19 @@ class CylinderTower:
     def set_active(self):
         cnt = 0
 
-        if self.tower_top >= 8:
-            for i in range(self.tower_top, -1, -1):
-                if all(block.is_collapsed() for block in self.blocks(i)):
+        for i in range(self.tower_top, -1, -1):
+            if all(self.is_collapsed(block) for block in self.blocks(i)):
+                if i >= 8:
                     for block in self.blocks(self.inactive_top):
                         block.state = State.ACTIVE
                         block.clearColor()
                         block.setColor(Colors.select())
                         block.node().setMass(1)
-                    self.tower_top -= 1
                     self.inactive_top -= 1
                     cnt += 1
-                    continue
-                break
-        else:
-            for i in range(self.tower_top, -1, -1):
-                for block in self.blocks(i):
-                    _ = block.is_collapsed()
+                self.tower_top -= 1
+                continue
+            break
 
         return cnt
 
@@ -170,15 +185,6 @@ class Cylinder(NodePath):
 
         self.state = state
         self.origianl_pos = pos
-        self.is_dropping = False
-
-    def is_collapsed(self):
-        if abs(self.origianl_pos.z - self.getZ()) > 0.5:
-            self.is_dropping = True
-            return True
-        return False
-        
-        # return abs(self.origianl_pos.z - self.getZ()) > 0.5
 
     def move(self, pos):
         self.node().setActive(True)
@@ -231,7 +237,7 @@ class TowerCrash(ShowBase):
         self.camera.setPos(10, -40, 10)  # 20, -18, 5
         self.camera.setP(10)
         # self.camera.lookAt(5, 3, 5)  # 5, 0, 3
-        self.camera.lookAt(Point3(-2, 12, 10)) #10
+        self.camera.lookAt(Point3(-2, 12, 10))  #10
 
         self.setup_lights()
         self.physical_world = BulletWorld()
@@ -293,7 +299,7 @@ class TowerCrash(ShowBase):
                 node_name = result.getNode().getName()
                 clicked_pos = result.getHitPos()
 
-                if (block := self.tower.blocks.find(node_name)).state == State.ACTIVE:
+                if (block := self.tower.blocks.find(node_name)).state in State.TARGET:
                     self.ball.state = State.MOVE
                     self.ball.move(clicked_pos, block)
 
@@ -302,14 +308,14 @@ class TowerCrash(ShowBase):
             else:
                 self.mouse_x = 0
                 self.dragging_duration += 1
-    
+
     def release(self):
         self.dragging_duration = 0
 
     def update(self, task):
         dt = globalClock.getDt()
         velocity = 0
-
+        # control rotation of the tower
         if self.dragging_duration:
             mouse_x = self.mouseWatcherNode.getMouse().getX()
             if (delta := mouse_x - self.mouse_x) < 0:
@@ -322,37 +328,20 @@ class TowerCrash(ShowBase):
         if self.dragging_duration >= self.max_duration:
             self.tower.rotate_around(velocity * dt)
 
+        # control dropped blocks
         for block in self.tower.blocks:
-            if block.state == State.ACTIVE:
+            if block.state in State.DROPPED:
                 result = self.physical_world.contactTest(block.node())
 
                 for contact in result.getContacts():
-                    if (name := contact.getNode1().getName()) == 'foundation':
-                        block.is_dropping = False
-                    elif name == 'waterSurface':
-                        block.is_dropping = False
-                        block.state = State.DROPPED
-
-
-                    # if contact.getNode1().getName() in ('foundation', 'waterSurface'):
-                    #     block.is_dropping = False
-
-                    #     if contact.getNode1().getName() == 'waterSurface':
-                    #         block.state = State.DROPPED
-                        
-        
-        # for block in self.tower.blocks:
-        #     if block.state == State.ACTIVE:
-        #         result = self.physical_world.contactTestPair(
-        #             self.scene.surface.node(), block.node()
-        #         )
-        #         if result.getNumContacts() > 0:
-        #             block.state = State.DROPPED
-
+                    if (name := contact.getNode1().getName()) == self.tower.foundation.name:
+                        block.state = State.ONSTONE
+                    elif name == self.scene.surface.name:
+                        block.state = State.INWATER
 
         if self.ball.state == State.DELETED:
             self.ball.setup(self.camera.getZ())
-
+        # control camera position
         distance = 0
         if cnt := self.tower.set_active():
             self.camera_move_distance += cnt * 2.5

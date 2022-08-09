@@ -13,9 +13,10 @@ PATH_SEA = 'models/bump/bump'
 
 class Foundation(NodePath):
 
-    def __init__(self):
-        super().__init__(BulletRigidBodyNode('foundation'))
+    def __init__(self, name):
+        super().__init__(BulletRigidBodyNode(name))
         self.reparentTo(base.render)
+        self.name = name
         stone = base.loader.loadModel(PATH_STONE)
         stone.setTexture(
             base.loader.loadTexture(TEXTURE_STONE), 1)
@@ -29,9 +30,10 @@ class Foundation(NodePath):
 
 class Sky(NodePath):
 
-    def __init__(self):
-        super().__init__(PandaNode('sky'))
+    def __init__(self, name):
+        super().__init__(PandaNode(name))
         self.reparentTo(base.render)
+        self.name = name
         sky = base.loader.loadModel(PATH_SKY)
         sky.setColor(2, 2, 2, 1)
         sky.setScale(0.02)
@@ -40,18 +42,20 @@ class Sky(NodePath):
 
 class WaterSurface(NodePath):
 
-    def __init__(self):
-        super().__init__(BulletRigidBodyNode('waterSurface'))
+    def __init__(self, name):
+        super().__init__(BulletRigidBodyNode(name))
         self.reparentTo(base.render)
+        self.name = name
         self.setCollideMask(BitMask32.bit(2))
         self.node().addShape(BulletPlaneShape(Vec3.up(), 0))
 
-       
+
 class Sea(NodePath):
 
-    def __init__(self):
-        super().__init__(PandaNode('sea'))
+    def __init__(self, name):
+        super().__init__(PandaNode(name))
         self.reparentTo(base.render)
+        self.name = name
         sea = base.loader.loadModel(PATH_SEA)
         sea.reparentTo(self)
         self.setTransparency(TransparencyAttrib.M_alpha)
@@ -59,15 +63,15 @@ class Sea(NodePath):
         self.setPos(-2, 0, 0.5)
         self.setColor(LColor(0.25, 0.41, 1, 0.3))
         self.setR(180)
-        
+
 
 class Scene:
 
     def __init__(self):
-        self.sky = Sky()
-        self.sea = Sea()
-        self.surface = WaterSurface()
-        self.foundation = Foundation()
+        self.sky = Sky('sky')
+        self.sea = Sea('sea')
+        self.surface = WaterSurface('waterSurface')
+        self.foundation = Foundation('foundation')
 
     def setup(self, physical_world):
         physical_world.attachRigidBody(self.surface.node())
