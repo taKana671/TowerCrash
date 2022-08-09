@@ -123,7 +123,8 @@ class CylinderTower:
         q.setFromAxisAngle(angle, self.axis.normalized())
 
         for block in self.blocks:
-            if block.state in {State.ACTIVE, State.STAY}:
+            # if block.state in {State.ACTIVE, State.STAY}:
+            if block.state in {State.ACTIVE, State.STAY} and not block.is_dropping:
                 r = q.xform(block.getPos() - self.center)
                 pos = self.center + r
                 block.setPos(pos)
@@ -144,6 +145,10 @@ class CylinderTower:
                     cnt += 1
                     continue
                 break
+        else:
+            for i in range(self.tower_top, -1, -1):
+                for block in self.blocks(i):
+                    _ = block.is_collapsed()
 
         return cnt
 
@@ -165,9 +170,15 @@ class Cylinder(NodePath):
 
         self.state = state
         self.origianl_pos = pos
+        self.is_dropping = False
 
     def is_collapsed(self):
-        return abs(self.origianl_pos.z - self.getZ()) > 0.5
+        if abs(self.origianl_pos.z - self.getZ()) > 0.5:
+            self.is_dropping = True
+            return True
+        return False
+        
+        # return abs(self.origianl_pos.z - self.getZ()) > 0.5
 
     def move(self, pos):
         self.node().setActive(True)
@@ -291,7 +302,7 @@ class TowerCrash(ShowBase):
             else:
                 self.mouse_x = 0
                 self.dragging_duration += 1
-
+    
     def release(self):
         self.dragging_duration = 0
 
@@ -313,11 +324,31 @@ class TowerCrash(ShowBase):
 
         for block in self.tower.blocks:
             if block.state == State.ACTIVE:
-                result = self.physical_world.contactTestPair(
-                    self.scene.ground.node(), block.node()
-                )
-                if result.getNumContacts() > 0:
-                    block.state = State.DROPPED
+                result = self.physical_world.contactTest(block.node())
+
+                for contact in result.getContacts():
+                    if (name := contact.getNode1().getName()) == 'foundation':
+                        block.is_dropping = False
+                    elif name == 'waterSurface':
+                        block.is_dropping = False
+                        block.state = State.DROPPED
+
+
+                    # if contact.getNode1().getName() in ('foundation', 'waterSurface'):
+                    #     block.is_dropping = False
+
+                    #     if contact.getNode1().getName() == 'waterSurface':
+                    #         block.state = State.DROPPED
+                        
+        
+        # for block in self.tower.blocks:
+        #     if block.state == State.ACTIVE:
+        #         result = self.physical_world.contactTestPair(
+        #             self.scene.surface.node(), block.node()
+        #         )
+        #         if result.getNumContacts() > 0:
+        #             block.state = State.DROPPED
+
 
         if self.ball.state == State.DELETED:
             self.ball.setup(self.camera.getZ())
