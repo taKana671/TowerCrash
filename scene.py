@@ -85,8 +85,11 @@ if __name__ == '__main__':
     # base.setBackgroundColor(0.5, 0.8, 1)
     base.disableMouse()
     base.camera.setPos(10, -40, 10)  # 20, -20, 5
+    # base.camera.setPos(-2, 12, 30)  # 20, -20, 5
     # base.camera.setP(-80)
     base.camera.lookAt(-2, 12, 10)  # 5, 0, 3
-    # dome = Sea()
+    
+    # rect = Rect()
+    # Cylinder()
     scene = Scene()
     base.run()
