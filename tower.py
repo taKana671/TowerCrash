@@ -67,46 +67,23 @@ class Blocks:
         return self.data[i][j]
 
 
-class CylinderTower(NodePath):
-
-    def __init__(self, center, stories, foundation):
-        super().__init__(PandaNode('cylinderTower'))
+class Tower(NodePath):
+    def __init__(self, center, stories, foundation, blocks):
+        super().__init__(PandaNode('tower'))
         self.reparentTo(base.render)
 
         self.center = center  # Point3(-2, 12, 0.3)
         self.foundation = foundation
-        self.blocks = Blocks(3, stories)
+        self.blocks = blocks
         self.axis = Vec3.up()
         self.tower_top = stories - 1
         self.inactive_top = int(stories * 2 / 3) - 1
-        self.block_h = 2.5
 
     def get_attrib(self, i):
         if i <= self.inactive_top:
             return GRAY, Block.INACTIVE
         else:
             return Colors.select(), Block.ACTIVE
-
-    def build(self, physical_world):
-        edge = 1.5                     # the length of one side
-        ok = edge / 2 / math.sqrt(3)   # the length of line OK, O: center of triangle
-
-        for i in range(len(self.blocks)):
-            h = self.block_h * (i + 1)
-            if i % 2 == 0:
-                points = [Point3(edge / 2, -ok, h), Point3(-edge / 2, -ok, h), Point3(0, ok * 2, h)]
-            else:
-                points = [Point3(-edge / 2, ok, h), Point3(edge / 2, ok, h), Point3(0, -ok * 2, h)]
-
-            for j, pt in enumerate(points):
-                color, state = self.get_attrib(i)
-                # cylinder = Cylinder(self.root, pt + self.center, str(i * 3 + j), color, state)
-                cylinder = Cylinder(self, pt + self.center, str(i * 3 + j), color, state)
-                physical_world.attachRigidBody(cylinder.node())
-
-                if state == state.INACTIVE:
-                    cylinder.node().setMass(0)
-                self.blocks.data[i][j] = cylinder
 
     def calc_distance(self, block):
         now_pos = block.getPos()
@@ -123,6 +100,8 @@ class CylinderTower(NodePath):
         return False
 
     def rotate_around(self, angle):
+        # Tried to use <nodepath>.setH() like self.foundation to rotate blocks, 
+        # but too slow.
         self.foundation.setH(self.foundation.getH() + angle)
         q = Quat()
         q.setFromAxisAngle(angle, self.axis.normalized())
@@ -132,6 +111,7 @@ class CylinderTower(NodePath):
                 r = q.xform(block.getPos() - self.center)
                 pos = self.center + r
                 block.setPos(pos)
+                # block.setH(block.getH() + angle)
 
     def set_active(self):
         cnt = 0
@@ -152,6 +132,92 @@ class CylinderTower(NodePath):
 
         return cnt
 
+    def crash(self, block, clicked_pos):
+        block.node().setActive(True)
+        impulse = Vec3.forward() * random.randint(1, 5)
+        block.node().applyImpulse(impulse, clicked_pos)
+
+
+class CylinderTower(Tower):
+
+    def __init__(self, center, stories, foundation):
+        super().__init__(center, stories, foundation, Blocks(3, stories))
+        self.block_h = 2.45
+
+    def build(self, physical_world):
+        edge = 1.5                     # the length of one side
+        ok = edge / 2 / math.sqrt(3)   # the length of line OK, O: center of triangle
+
+        for i in range(len(self.blocks)):
+            h = (self.block_h * (i + 1))
+
+            if i % 2 == 0:
+                points = [Point3(edge / 2, -ok, h), Point3(-edge / 2, -ok, h), Point3(0, ok * 2, h)]
+            else:
+                points = [Point3(-edge / 2, ok, h), Point3(edge / 2, ok, h), Point3(0, -ok * 2, h)]
+
+            for j, pt in enumerate(points):
+                color, state = self.get_attrib(i)
+                cylinder = Cylinder(self, pt + self.center, str(i * 3 + j), color, state)
+                physical_world.attachRigidBody(cylinder.node())
+
+                if state == state.INACTIVE:
+                    cylinder.node().setMass(0)
+                self.blocks.data[i][j] = cylinder
+
+
+class ThinTower(Tower):
+
+    def __init__(self, center, stories, foundation):
+        super().__init__(center, stories, foundation, Blocks(6, 1))
+        self.block_h = 2.5
+        # self.setPos(center)
+
+    def build(self, physical_world):
+        edge = 2.3         # the length of one side
+        for i in range(len(self.blocks)):
+            for idx, j in enumerate([-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]):
+            # for idx, j in enumerate([-0.5, -1.5, -2.5, 0.5, 1.5, 2.5]):
+            # for idx, j in enumerate([0, -1, -2, 1, 2]):
+                pos = Point3(edge * j, 0, 2.5)
+                cube = Cube(self, pos + self.center, str(i * 6 + idx), Colors.select(), Block.ACTIVE)
+                physical_world.attachRigidBody(cube.node())
+                # self.blocks.data[i][j] = cube
+                self.blocks.data[i][idx] = cube
+
+
+        # edge = 2.3                     # the length of one side
+        # for i in range(len(self.blocks)):
+        #     x = -edge * 2.5
+        #     start = Point3(x, 0, 2.5)
+        #     for j in range(self.blocks.cols):
+        #         cube = Cube(self, start + self.center, str(i * 6 + j), Colors.select(), Block.ACTIVE)
+        #         x += edge
+        #         start = Vec3(x, 0, 2.5)
+        #         self.blocks.data[i][j] = cube
+
+    def rotate_around(self, angle):
+        self.foundation.setH(self.foundation.getH() + angle)
+        q = Quat()
+        q.setFromAxisAngle(angle, self.axis.normalized())
+
+        for i in [2, 1, 0, 3, 4, 5]:
+            block = self.blocks.data[0][i]
+            r = q.xform(block.getPos() - self.center)
+            pos = self.center + r
+            
+            block.setH(block.getH() + angle)
+            block.setPos(pos)
+
+        # for block in self.blocks:
+        #     if block.state in Block.ROTATABLE:
+        #         r = q.xform(block.getPos() - self.center)
+        #         pos = self.center + r
+                
+        #         block.setH(block.getH() + angle)
+        #         block.setPos(pos)
+
+
 
 class Cylinder(NodePath):
 
@@ -167,11 +233,23 @@ class Cylinder(NodePath):
         self.setScale(0.7)
         self.setColor(color)
         self.setPos(pos)
-
         self.state = state
         self.origianl_pos = pos
 
-    def move(self, pos):
-        self.node().setActive(True)
-        impulse = Vec3.forward() * random.randint(1, 5)
-        self.node().applyImpulse(impulse, pos)
+
+class Cube(NodePath):
+
+    def __init__(self, root, pos, name, color, state):
+        super().__init__(BulletRigidBodyNode(name))
+        self.reparentTo(root)
+        cylinder = base.loader.loadModel('models/cube/cube')
+        cylinder.reparentTo(self)
+        end, tip = cylinder.getTightBounds()
+        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2))
+        self.node().addShape(BulletBoxShape((tip - end) / 2))
+        self.node().setMass(1)
+        self.setScale(0.7)
+        self.setColor(color)
+        self.setPos(pos)
+        self.state = state
+        self.origianl_pos = pos

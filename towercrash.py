@@ -11,7 +11,7 @@ from panda3d.core import AmbientLight, DirectionalLight
 
 from bubble import Bubbles
 from scene import Scene
-from tower import CylinderTower, Colors, Block
+from tower import CylinderTower, ThinTower, Colors, Block
 
 
 PATH_SPHERE = "models/sphere/sphere"
@@ -24,13 +24,14 @@ class Ball(Enum):
     MOVE = auto()
 
 
-class Sphere(NodePath):
+class ColorBall(NodePath):
 
-    def __init__(self):
+    def __init__(self, tower):
         super().__init__(PandaNode('ball'))
         ball = base.loader.loadModel(PATH_SPHERE)
         ball.reparentTo(self)
         self.setScale(0.2)
+        self.tower = tower
         self.state = None
         self.bubbles = Bubbles()
 
@@ -49,7 +50,7 @@ class Sphere(NodePath):
         para = Parallel(self.bubbles.get_sequence(self.getColor(), clicked_pos))
 
         if block.getColor() == self.getColor():
-            para.append(Func(lambda: block.move(clicked_pos)))
+            para.append(Func(lambda: self.tower.crash(block, clicked_pos)))
 
         para.start()
 
@@ -66,10 +67,11 @@ class TowerCrash(ShowBase):
     def __init__(self):
         super().__init__()
         self.disableMouse()
-        self.camera.setPos(10, -40, 10)  # 20, -18, 5
+        self.camera.setPos(20, -18, 30)
+        # self.camera.setPos(10, -40, 2.5)  # 20, -18, 5
         self.camera.setP(10)
-        # self.camera.lookAt(5, 3, 5)  # 5, 0, 3
-        self.camera.lookAt(Point3(-2, 12, 10))  #10
+        self.camera.lookAt(5, 3, 5)  # 5, 0, 3
+        # self.camera.lookAt(Point3(-2, 12, 12.5))  #10
         self.camera_lowest_z = 2.5
 
         self.setup_lights()
@@ -79,15 +81,14 @@ class TowerCrash(ShowBase):
         self.scene = Scene()
         self.scene.setup(self.physical_world)
         self.create_tower()
-        # self.camera.setPos(20, -18, 55)
 
-        camera_z = (self.tower.inactive_top + 1) * 2.5
-        look_z = camera_z + 4 * 2.5
-        self.camera.setPos(Point3(10, -40, camera_z))
-        self.camera.lookAt(Point3(-2, 12, look_z))
+        # camera_z = (self.tower.inactive_top + 1) * 2.5
+        # look_z = camera_z + 4 * 2.5
+        # self.camera.setPos(Point3(10, -40, camera_z))
+        # self.camera.lookAt(Point3(-2, 12, look_z))
         self.camera_move_distance = 0
 
-        self.ball = Sphere()
+        self.ball = ColorBall(self.tower)
         self.ball.setup(self.camera.getZ())
 
         self.dragging_duration = 0
@@ -99,7 +100,8 @@ class TowerCrash(ShowBase):
 
     def create_tower(self):
         center = Point3(-2, 12, 1.0)
-        self.tower = CylinderTower(center, 24, self.scene.foundation)
+        # self.tower = CylinderTower(center, 24, self.scene.foundation)
+        self.tower = ThinTower(center, 1, self.scene.foundation)
         self.tower.build(self.physical_world)
 
     def setup_lights(self):
@@ -165,9 +167,8 @@ class TowerCrash(ShowBase):
         for block in self.tower.blocks:
             if block.state in Block.DROPPED:
                 result = self.physical_world.contactTest(block.node())
-
                 for contact in result.getContacts():
-                    if (name := contact.getNode1().getName()) == self.tower.foundation.name:
+                    if (name := contact.getNode1().getName()) == self.scene.foundation.name:
                         block.state = Block.ONSTONE
                     elif name == self.scene.surface.name:
                         block.state = Block.INWATER
