@@ -54,15 +54,10 @@ class Blocks:
             if self.data[i][j]:
                 yield self.data[i][j]
 
-        # for i, j in itertools.product(range(self.rows), range(self.cols)):
-        #     yield self.data[i][j]
-
     def __call__(self, i):
         for block in self.data[i]:
             if block:
                 yield block
-        # for block in self.data[i]:
-        #     yield block
 
     def __getitem__(self, key):
         r, c = key
@@ -76,8 +71,8 @@ class Blocks:
         return len(self.data)
 
     def find(self, node_name):
-        j = int(node_name) % 3
-        i = int(node_name) // 3
+        j = int(node_name) % self.cols
+        i = int(node_name) // self.cols
 
         return self.data[i][j]
 
@@ -178,86 +173,48 @@ class CylinderTower(Tower):
 
                 if state == state.INACTIVE:
                     cylinder.node().setMass(0)
-                self.blocks.data[i][j] = cylinder
+                self.blocks[i, j] = cylinder
 
 
 class ThinTower(Tower):
 
     def __init__(self, center, stories, foundation):
-        super().__init__(center, stories, foundation, Blocks(6, 2))
-        self.block_h = 2.5
-
-        ne = self.blocks.cols // 2
-        no = ne - 1
-        if self.blocks.cols % 2 == 0:
-            self.even_row = [v + 0.5 if i >= ne else v - 0.5 for i, v in enumerate(itertools.chain(range(-ne + 1, 1), range(0, ne)))]
-            self.odd_row = [v for v in range(-1 * no, no + 1)]
-        else:
-            self.even_row = [v for v in range(-1 * ne, ne + 1)]
-            self.odd_row = [v + 0.5 if i >= no else v - 0.5 for i, v in enumerate(itertools.chain(range(-no + 1, 1), range(0, no)))]
-        
+        super().__init__(center, stories, foundation, Blocks(7, stories))
+        self.block_h = 2.3
+        self.even_row = [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]
+        self.odd_row = [-2.75, -2, -1, 0, 1, 2, 2.75]
+        self.cols = [3, 2, 1, 0, 4, 5, 6]
 
     def build(self, physical_world):
-        edge = 2.3         # the length of one side
+        edge = 2.3
         for i in range(len(self.blocks)):
             h = (self.block_h * (i + 1))
-            if i % 2 == 0:
-                for j, v in enumerate(self.even_row):
-                    pos = Point3(edge * v, 0, h)
-                    cube = Cube(self, pos + self.center, str(i * 6 + j), Colors.select(), Block.ACTIVE)
-                    physical_world.attachRigidBody(cube.node())
-                    # self.blocks.data[i][j] = cube
-                    self.blocks.data[i][j] = cube
-            else:
-                for j, v in enumerate(self.odd_row):
-                    pos = Point3(edge * v, 0, h)
-                    cube = Cube(self, pos + self.center, str(i * 6 + j), Colors.select(), Block.ACTIVE)
-                    physical_world.attachRigidBody(cube.node())
-                    # self.blocks.data[i][j] = cube
-                    self.blocks.data[i][j] = cube
+            cols = self.even_row if not i % 2 else self.odd_row
+            for j, col in enumerate(cols):
+                color, state = self.get_attrib(i)
+                pos = Point3(edge * col, 0, h)
+                cube = Cube(self, pos + self.center, str(i * 7 + j), color, state)
+                if i % 2 and (j == 0 or j == len(cols) - 1):
+                    cube.setSx(cube.getSx() / 2)
+                physical_world.attachRigidBody(cube.node())
 
+                if state == state.INACTIVE:
+                    cube.node().setMass(0)
 
-
-        # for i in range(len(self.blocks)):
-        #     for idx, j in enumerate([-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]):
-        #     # for idx, j in enumerate([-0.5, -1.5, -2.5, 0.5, 1.5, 2.5]):
-        #     # for idx, j in enumerate([0, -1, -2, 1, 2]):
-        #         pos = Point3(edge * j, 0, 2.5)
-        #         cube = Cube(self, pos + self.center, str(i * 6 + idx), Colors.select(), Block.ACTIVE)
-        #         physical_world.attachRigidBody(cube.node())
-        #         # self.blocks.data[i][j] = cube
-        #         self.blocks.data[i][idx] = cube
-
-                # cnt = 5
-                # n = cnt // 2
-                # odd
-                # [i for i in range(-1 * n, n + 1)]
-                # even
-                # [i + 0.5 if idx >= n else i - 0.5 for idx, i in enumerate(itertools.chain(range(-n + 1, 1), range(0, n)))]
-
-
+                self.blocks[i, j] = cube
 
     def rotate_around(self, angle):
         self.foundation.setH(self.foundation.getH() + angle)
         q = Quat()
         q.setFromAxisAngle(angle, self.axis.normalized())
 
-        for i in [2, 1, 0, 3, 4, 5]:
-            block = self.blocks.data[0][i]
-            r = q.xform(block.getPos() - self.center)
-            pos = self.center + r
-            
-            block.setH(block.getH() + angle)
-            block.setPos(pos)
-
-        # for block in self.blocks:
-        #     if block.state in Block.ROTATABLE:
-        #         r = q.xform(block.getPos() - self.center)
-        #         pos = self.center + r
-                
-        #         block.setH(block.getH() + angle)
-        #         block.setPos(pos)
-
+        for i in range(self.blocks.rows):
+            for j in self.cols:
+                if (block := self.blocks[i, j]) and block.state in Block.ROTATABLE:
+                    r = q.xform(block.getPos() - self.center)
+                    pos = self.center + r
+                    block.setPos(pos)
+                    block.setH(block.getH() + angle)
 
 
 class Cylinder(NodePath):
@@ -288,8 +245,9 @@ class Cube(NodePath):
         end, tip = cylinder.getTightBounds()
         self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2))
         self.node().addShape(BulletBoxShape((tip - end) / 2))
-        self.node().setMass(1)
-        self.setScale(0.7)
+        self.node().setMass(3)
+        # self.setScale(0.7)
+        self.setScale(Vec3(0.7, 0.35, 0.7))
         self.setColor(color)
         self.setPos(pos)
         self.state = state

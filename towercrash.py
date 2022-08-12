@@ -100,8 +100,8 @@ class TowerCrash(ShowBase):
 
     def create_tower(self):
         center = Point3(-2, 12, 1.0)
-        self.tower = CylinderTower(center, 24, self.scene.foundation)
-        # self.tower = ThinTower(center, 1, self.scene.foundation)
+        # self.tower = CylinderTower(center, 24, self.scene.foundation)
+        self.tower = ThinTower(center, 24, self.scene.foundation)
         self.tower.build(self.physical_world)
 
     def setup_lights(self):
@@ -163,6 +163,7 @@ class TowerCrash(ShowBase):
         if self.dragging_duration >= self.max_duration:
             self.tower.rotate_around(velocity * dt)
 
+        # print([block.state for block in self.tower.blocks])
         # control dropped blocks
         for block in self.tower.blocks:
             if block.state in Block.DROPPED:
