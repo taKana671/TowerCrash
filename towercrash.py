@@ -82,10 +82,10 @@ class TowerCrash(ShowBase):
         self.scene.setup(self.physical_world)
         self.create_tower()
 
-        # camera_z = (self.tower.inactive_top + 1) * 2.5
-        # look_z = camera_z + 4 * 2.5
-        # self.camera.setPos(Point3(10, -40, camera_z))
-        # self.camera.lookAt(Point3(-2, 12, look_z))
+        camera_z = (self.tower.inactive_top + 1) * 2.5
+        look_z = camera_z + 4 * 2.5
+        self.camera.setPos(Point3(10, -40, camera_z))
+        self.camera.lookAt(Point3(-2, 12, look_z))
         self.camera_move_distance = 0
 
         self.ball = ColorBall(self.tower)
@@ -100,8 +100,8 @@ class TowerCrash(ShowBase):
 
     def create_tower(self):
         center = Point3(-2, 12, 1.0)
-        # self.tower = CylinderTower(center, 24, self.scene.foundation)
-        self.tower = ThinTower(center, 1, self.scene.foundation)
+        self.tower = CylinderTower(center, 24, self.scene.foundation)
+        # self.tower = ThinTower(center, 1, self.scene.foundation)
         self.tower.build(self.physical_world)
 
     def setup_lights(self):

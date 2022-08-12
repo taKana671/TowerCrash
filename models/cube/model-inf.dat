@@ -1,7 +1,7 @@
 salespitch=
 textures=
-solid-models=box 
-name=box
+solid-models=cube 
+name=cube
 license=CCA 2.0
 other-files=
 parts=1
