@@ -1,6 +1,6 @@
 from direct.showbase.ShowBase import ShowBase
 from panda3d.bullet import BulletRigidBodyNode
-from panda3d.bullet import BulletPlaneShape, BulletCylinderShape, BulletBoxShape
+from panda3d.bullet import BulletPlaneShape, BulletCylinderShape
 from panda3d.core import Vec3, Point3, LColor, BitMask32
 from panda3d.core import PandaNode, NodePath, CardMaker, TransparencyAttrib
 
@@ -22,7 +22,7 @@ class Foundation(NodePath):
             base.loader.loadTexture(TEXTURE_STONE), 1)
         stone.reparentTo(self)
         end, tip = stone.getTightBounds()
-        self.node().addShape(BulletBoxShape((tip - end) / 2))
+        self.node().addShape(BulletCylinderShape((tip - end) / 2))
         self.setScale(7)
         self.setCollideMask(BitMask32.bit(2))
         self.setPos(Point3(-2, 12, -10))

@@ -4,7 +4,7 @@ from direct.interval.IntervalGlobal import Sequence, Parallel, Func
 from direct.showbase.ShowBaseGlobal import globalClock
 from direct.showbase.ShowBase import ShowBase
 from panda3d.bullet import BulletSphereShape
-from panda3d.bullet import BulletWorld
+from panda3d.bullet import BulletWorld, BulletDebugNode
 from panda3d.core import PandaNode, NodePath
 from panda3d.core import Vec3, LColor, BitMask32, Point3
 from panda3d.core import AmbientLight, DirectionalLight
@@ -94,6 +94,12 @@ class TowerCrash(ShowBase):
         self.dragging_duration = 0
         self.max_duration = 5
 
+        # *******************************************
+        collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
+        self.physical_world.setDebugNode(collide_debug.node())
+        collide_debug.show()
+        # *******************************************
+
         self.accept('mouse1', self.click)
         self.accept('mouse1-up', self.release)
         self.taskMgr.add(self.update, 'update')
@@ -101,7 +107,7 @@ class TowerCrash(ShowBase):
     def create_tower(self):
         center = Point3(-2, 12, 1.0)
         # self.tower = CylinderTower(center, 24, self.scene.foundation)
-        self.tower = ThinTower(center, 24, self.scene.foundation)
+        self.tower = ThinTower(center, 16, self.scene.foundation, self.physical_world)
         self.tower.build(self.physical_world)
 
     def setup_lights(self):
@@ -149,6 +155,7 @@ class TowerCrash(ShowBase):
 
     def update(self, task):
         dt = globalClock.getDt()
+
         velocity = 0
         # control rotation of the tower
         if self.dragging_duration:
@@ -163,19 +170,27 @@ class TowerCrash(ShowBase):
         if self.dragging_duration >= self.max_duration:
             self.tower.rotate_around(velocity * dt)
 
-        # print([block.state for block in self.tower.blocks])
         # control dropped blocks
         for block in self.tower.blocks:
-            if block.state in Block.DROPPED:
+
+            if block.state in Block.MOVABLE:
                 result = self.physical_world.contactTest(block.node())
                 for contact in result.getContacts():
-                    if (name := contact.getNode1().getName()) == self.scene.foundation.name:
-                        block.state = Block.ONSTONE
-                    elif name == self.scene.surface.name:
+                    if contact.getNode1().getName() == self.scene.surface.name:
                         block.state = Block.INWATER
+                        # self.physical_world.remove(block.node())
+                        # block.removeNode()
 
+            if block.state == Block.INWATER:
+                self.physical_world.remove(block.node())
+                block.state = Block.DELETE
+                self.tower.cleanup(block)
+
+
+        # setup next ball
         if self.ball.state == Ball.DELETED:
             self.ball.setup(self.camera.getZ())
+
         # control camera position
         distance = 0
         if cnt := self.tower.set_active():
