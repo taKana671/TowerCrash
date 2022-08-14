@@ -105,9 +105,8 @@ class TowerCrash(ShowBase):
         self.taskMgr.add(self.update, 'update')
 
     def create_tower(self):
-        center = Point3(-2, 12, 1.0)
-        # self.tower = CylinderTower(center, 24, self.scene.foundation)
-        self.tower = ThinTower(center, 16, self.scene.foundation, self.physical_world)
+        self.tower = CylinderTower(24, self.scene.foundation)
+        # self.tower = ThinTower(24, self.scene.foundation)
         self.tower.build(self.physical_world)
 
     def setup_lights(self):
@@ -176,16 +175,12 @@ class TowerCrash(ShowBase):
             if block.state in Block.MOVABLE:
                 result = self.physical_world.contactTest(block.node())
                 for contact in result.getContacts():
-                    if contact.getNode1().getName() == self.scene.surface.name:
+                    if (name := contact.getNode1().getName()) == self.scene.surface.name:
                         block.state = Block.INWATER
-                        # self.physical_world.remove(block.node())
-                        # block.removeNode()
-
-            if block.state == Block.INWATER:
-                self.physical_world.remove(block.node())
-                block.state = Block.DELETE
-                self.tower.cleanup(block)
-
+                    elif name == self.scene.bottom.name:
+                        self.tower.blocks[block.node().getName()] = None
+                        self.physical_world.remove(block.node())
+                        block.removeNode()
 
         # setup next ball
         if self.ball.state == Ball.DELETED:

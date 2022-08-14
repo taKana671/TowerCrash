@@ -20,7 +20,6 @@ class Block(Flag):
     INACTIVE = auto()
     INWATER = auto()
     CRASH = auto()
-    DELETE = auto()
 
     ROTATABLE = ACTIVE | INACTIVE | CRASH
     TARGET = ACTIVE | CRASH
@@ -66,25 +65,32 @@ class Blocks:
         return self.data[r][c]
 
     def __setitem__(self, key, value):
-        r, c = key
+        if isinstance(key, str):
+            r, c = self.get_index(key)
+        elif isinstance(key, tuple):
+            r, c = key
+        else:
+            raise TypeError()
+
         self.data[r][c] = value
 
     def __len__(self):
         return len(self.data)
 
-    def find(self, node_name):
-        j = int(node_name) % self.cols
-        i = int(node_name) // self.cols
+    def get_index(self, name):
+        r = int(name) // self.cols
+        c = int(name) % self.cols
+        return r, c
 
-        return self.data[i][j]
+    def find(self, node_name):
+        r, c = self.get_index(node_name)
+        return self.data[r][c]
 
 
 class Tower(NodePath):
-    def __init__(self, center, stories, foundation, world, blocks):
+    def __init__(self, stories, foundation, blocks):
         super().__init__(PandaNode('tower'))
         self.reparentTo(base.render)
-        self.world = world
-        self.center = center  # Point3(-2, 12, 0.3)
         self.foundation = foundation
         self.blocks = blocks
         self.axis = Vec3.up()
@@ -114,20 +120,19 @@ class Tower(NodePath):
 
     def set_active(self):
         cnt = 0
-
-        for i in range(self.tower_top, -1, -1):
-            if all(self.is_collapsed(block) for block in self.blocks(i)):
-                if i >= 8:
+        if self.inactive_top >= 0:
+            for i in range(self.tower_top, -1, -1):
+                if all(self.is_collapsed(block) for block in self.blocks(i)):
                     for block in self.blocks(self.inactive_top):
                         block.state = Block.ACTIVE
                         block.clearColor()
                         block.setColor(Colors.select())
                         block.node().setMass(1)
                     self.inactive_top -= 1
+                    self.tower_top -= 1
                     cnt += 1
-                self.tower_top -= 1
-                continue
-            break
+                    continue
+                break
 
         return cnt
 
@@ -143,19 +148,12 @@ class Tower(NodePath):
         else:
             block.node().applyCentralImpulse(Vec3.forward() * 10)
 
-    def cleanup(self, block):
-        pos = block.getPos() - Vec3(0, 0, 5)
-
-        Sequence(
-            block.posInterval(0.5, pos),
-            Func(lambda: block.removeNode())
-        ).start()
-
 
 class CylinderTower(Tower):
 
-    def __init__(self, center, stories, foundation):
-        super().__init__(center, stories, foundation, Blocks(3, stories))
+    def __init__(self, stories, foundation):
+        super().__init__(stories, foundation, Blocks(3, stories))
+        self.center = Point3(-2, 12, 1.0)
         self.block_h = 2.45
 
     def build(self, physical_world):
@@ -180,7 +178,7 @@ class CylinderTower(Tower):
                 self.blocks[i, j] = cylinder
 
     def rotate_around(self, angle):
-        # Tried to use <nodepath>.setH() like self.foundation to rotate blocks, 
+        # Tried to use <nodepath>.setH() like self.foundation to rotate blocks,
         # but too slow.
         self.foundation.setH(self.foundation.getH() + angle)
         q = Quat()
@@ -196,8 +194,9 @@ class CylinderTower(Tower):
 
 class ThinTower(Tower):
 
-    def __init__(self, center, stories, foundation, world):
-        super().__init__(center, stories, foundation, world, Blocks(7, stories))
+    def __init__(self, stories, foundation):
+        super().__init__(stories, foundation, Blocks(7, stories))
+        self.center = Point3(-2, 12, 1.0)
         self.block_h = 2.3
         self.even_row = [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]
         self.odd_row = [-2.75, -2, -1, 0, 1, 2, 2.75]
@@ -243,8 +242,12 @@ class Cylinder(NodePath):
         cylinder = base.loader.loadModel(PATH_CYLINDER)
         cylinder.reparentTo(self)
         end, tip = cylinder.getTightBounds()
-        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2))
         self.node().addShape(BulletCylinderShape((tip - end) / 2))
+        if int(name) > 24:
+            self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(4))
+        else:
+            self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
+        # self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2))
         self.node().setMass(1)
         self.setScale(0.7)
         self.setColor(color)
@@ -261,8 +264,13 @@ class Cube(NodePath):
         cylinder = base.loader.loadModel(PATH_CUBE)
         cylinder.reparentTo(self)
         end, tip = cylinder.getTightBounds()
-        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2))
         self.node().addShape(BulletBoxShape((tip - end) / 2))
+
+        if int(name) % 10 == 0:
+            self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
+        else:
+            self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(4))
+
         self.node().setMass(1)
         # self.setScale(0.7)
         self.setScale(Vec3(0.7, 0.35, 0.7))

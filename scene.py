@@ -46,8 +46,18 @@ class WaterSurface(NodePath):
         super().__init__(BulletRigidBodyNode(name))
         self.reparentTo(base.render)
         self.name = name
-        self.setCollideMask(BitMask32.bit(2))
+        self.setCollideMask(BitMask32.bit(3))
         self.node().addShape(BulletPlaneShape(Vec3.up(), 0))
+
+
+class WaterBottom(NodePath):
+
+    def __init__(self, name):
+        super().__init__(BulletRigidBodyNode(name))
+        self.reparentTo(base.render)
+        self.name = name
+        self.setCollideMask(BitMask32.bit(4))
+        self.node().addShape(BulletPlaneShape(Vec3.up(), -10))
 
 
 class Sea(NodePath):
@@ -70,12 +80,15 @@ class Scene:
     def __init__(self):
         self.sky = Sky('sky')
         self.sea = Sea('sea')
-        self.surface = WaterSurface('waterSurface')
         self.foundation = Foundation('foundation')
+        self.surface = WaterSurface('waterSurface')
+        self.bottom = WaterBottom('waterBottom')
 
     def setup(self, physical_world):
         physical_world.attachRigidBody(self.surface.node())
         physical_world.attachRigidBody(self.foundation.node())
+        physical_world.attachRigidBody(self.bottom.node())
+
 
 
 if __name__ == '__main__':
