@@ -3,10 +3,10 @@ import math
 import random
 from enum import Enum, Flag, auto
 
-from panda3d.bullet import BulletCylinderShape, BulletBoxShape
+from panda3d.bullet import BulletCylinderShape, BulletBoxShape, BulletConvexHullShape
 from panda3d.bullet import BulletRigidBodyNode
 from direct.interval.IntervalGlobal import Sequence, Func
-from panda3d.core import PandaNode, NodePath
+from panda3d.core import PandaNode, NodePath, TransformState
 from panda3d.core import Quat, Vec3, LColor, BitMask32, Point3
 
 
@@ -234,6 +234,35 @@ class ThinTower(Tower):
                     block.setH(block.getH() + angle)
 
 
+class TripleTower(Tower):
+
+    def __init__(self, stories, foundation):
+        super().__init__(stories, foundation, Blocks(3, 1))
+        self.center = Point3(-2, 12, 1.0)
+        self.block_h = 2.5
+        
+    def build(self, physical_world):
+        edge = 1.1
+        center = Point3(0, 12, 1.0)
+        
+        pos = Point3(0, 0, self.block_h)
+        # triangle = TriangularPrism(self, pos + self.center, str(i * 7 + j), color, state)
+        triangle = TriangularPrism(self, pos + center, "0", Colors.select(), Block.ACTIVE)
+        physical_world.attachRigidBody(triangle.node())
+        self.blocks.data[0][0] = triangle
+
+        
+        pos = Point3(1 + edge, 0, self.block_h)
+        triangle = TriangularPrism(self, pos + center, "0", Colors.select(), Block.ACTIVE)
+        triangle.setH(180)
+        physical_world.attachRigidBody(triangle.node())
+        self.blocks.data[0][1] = triangle
+
+    def rotate_around(self, angle):
+        pass
+
+
+
 class Cylinder(NodePath):
 
     def __init__(self, root, pos, name, color, state):
@@ -278,3 +307,41 @@ class Cube(NodePath):
         self.setPos(pos)
         self.state = state
         self.pos = pos
+
+
+class TriangularPrism(NodePath):
+
+    def __init__(self, root, pos, name, color, state):
+        super().__init__(BulletRigidBodyNode(name))
+        self.reparentTo(root)
+        # tri = base.loader.loadModel('models/trianglular_prism/trianglular-prism')
+        # tri.reparentTo(self)
+
+        # end, tip = tri.getTightBounds()
+        # shape = BulletBoxShape((tip - end) / 2)
+        # self.node().addShape(shape)
+
+        geom = base.loader.loadModel('models/trianglular_prism/trianglular-prism') \
+                .findAllMatches('**/+GeomNode')\
+                .getPath(0) \
+                .node()\
+                .getGeom(0)
+        shape = BulletConvexHullShape()
+        shape.addGeom(geom)
+        self.node().addShape(shape)
+
+        # if int(name) % 10 == 0:
+        #     self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
+        # else:
+        #     self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(4))
+        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
+
+        self.node().setMass(1)
+        self.setScale(0.5)
+        self.setColor(color)
+        self.setPos(pos)
+        self.state = state
+        self.pos = pos
+
+        self.setP(-90)
+
