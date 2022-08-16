@@ -237,37 +237,55 @@ class ThinTower(Tower):
 class TripleTower(Tower):
 
     def __init__(self, stories, foundation):
-        super().__init__(stories, foundation, Blocks(3, 1))
+        super().__init__(stories, foundation, Blocks(4, 1))
         self.center = Point3(-2, 12, 1.0)
-        self.block_h = 2.5
-        
+        self.block_h = 2.48
+
     def build(self, physical_world):
-        edge = 2.6
-        center = Point3(0, 12, 1.0)
-        
-        # pos = Point3(0, 0, self.block_h)
-        pos = Point3(0, edge * 0.5 / 1.73, self.block_h)
-        triangle2 = TriangularPrism(self, pos + center, "1", Colors.select(), Block.ACTIVE)
-        print(triangle2.getHpr())
-        physical_world.attachRigidBody(triangle2.node())
-        self.blocks.data[0][1] = triangle2    
-        
-        pos = Point3(0, -(edge * 0.5 / 1.73), self.block_h)
-        # triangle = TriangularPrism(self, pos + self.center, str(i * 7 + j), color, state)
-        triangle1 = TriangularPrism(self, pos + self.center, '0', Colors.select(), Block.ACTIVE)
-        physical_world.attachRigidBody(triangle1.node())
-        # triangle1.setH(90)
-        triangle1.setR(180)
-        self.blocks.data[0][0] = triangle1
-        
-        # pos = Point3(0, -edge * 2, self.block_h)
-        # triangle2 = TriangularPrism(self, pos + center, "1", Colors.select(), Block.ACTIVE)
-        # triangle2.setH(180)
-        # physical_world.attachRigidBody(triangle2.node())
-        # self.blocks.data[0][1] = triangle2
+        edge = 2.536
+        ok = edge / 2 / math.sqrt(3)
+        h = 2.5
+
+        points = [Point3(0, 0, h), Point3(edge / 2, -ok, h), Point3(-edge / 2, -ok, h), Point3(0, ok * 2, h)]
+        # points = [Point3(-edge / 2, -ok, h), Point3(0, ok * 2, h)]
+
+        center = Point3(-1, 15, 1.0)
+        for i, pos in enumerate(points):
+            triangle1 = TriangularPrism(self, pos + center, str(i), Colors.select(), Block.ACTIVE)
+            if i == 0:
+                triangle1.setH(180)
+            physical_world.attachRigidBody(triangle1.node())
+            self.blocks.data[0][i] = triangle1
+
+        center = Point3(1, 10, 1.0)
+        for i, pos in enumerate(points):
+            triangle1 = TriangularPrism(self, pos + center, str(i), Colors.select(), Block.ACTIVE)
+            if i == 0:
+                triangle1.setH(180)
+            physical_world.attachRigidBody(triangle1.node())
+            self.blocks.data[0][i] = triangle1
+
+        center = Point3(-5, 10, 1.0)
+        for i, pos in enumerate(points):
+            triangle1 = TriangularPrism(self, pos + center, str(i), Colors.select(), Block.ACTIVE)
+            if i == 0:
+                triangle1.setH(180)
+            physical_world.attachRigidBody(triangle1.node())
+            # self.blocks.data[0][i] = triangle1
 
     def rotate_around(self, angle):
-        pass
+        self.foundation.setH(self.foundation.getH() + angle)
+        q = Quat()
+        q.setFromAxisAngle(angle, self.axis.normalized())
+
+        for i in range(self.blocks.rows):
+            for block in self.blocks(i):
+                if block.state in Block.ROTATABLE:
+                    r = q.xform(block.getPos() - self.center)
+                    block.pos = block.getPos()
+                    block.setPos(self.center + r)
+                    block.setH(block.getH() + angle)
+
 
 
 
@@ -327,20 +345,21 @@ class TriangularPrism(NodePath):
         # shape = BulletBoxShape((tip - end) / 2)
         # self.node().addShape(shape)
 
-        tri = base.loader.loadModel('models/trianglular_prism/trianglular-prism')
+        tri = base.loader.loadModel('models/trianglular-prism/trianglular-prism')
         geom = tri.findAllMatches('**/+GeomNode').getPath(0).node().getGeom(0)
 
         shape = BulletConvexHullShape()
-        shape.addGeom(geom, TransformState.makeScale(0.7))
+        shape.addGeom(geom, TransformState.makeScale(0.71))
         # shape.addGeom(geom)
         self.node().setMass(1.0)
         self.node().addShape(shape)
         self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
+        
         self.setP(-90)
         self.setPos(pos)
         # self.setScale(0.3)
         self.setColor(color)
-        tri.setScale(0.2)
+        tri.setScale(0.22)
         tri.reparentTo(self)
 
         # if int(name) % 10 == 0:

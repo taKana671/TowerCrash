@@ -11,7 +11,7 @@ from panda3d.core import AmbientLight, DirectionalLight
 
 from bubble import Bubbles
 from scene import Scene
-from tower import CylinderTower, ThinTower, Colors, Block
+from tower import CylinderTower, ThinTower, TripleTower, Colors, Block
 
 
 PATH_SPHERE = "models/sphere/sphere"
@@ -68,10 +68,10 @@ class TowerCrash(ShowBase):
         super().__init__()
         self.disableMouse()
         self.camera.setPos(20, -18, 30)
-        # self.camera.setPos(10, -40, 2.5)  # 20, -18, 5
+        # self.camera.setPos(10, -40, 20)  # 10, -40, 2.5
         self.camera.setP(10)
-        self.camera.lookAt(5, 3, 5)  # 5, 0, 3
-        # self.camera.lookAt(Point3(-2, 12, 12.5))  #10
+        # self.camera.lookAt(5, 3, 5)  # 5, 0, 3
+        self.camera.lookAt(Point3(-2, 12, 2.5))  # 50
         self.camera_lowest_z = 2.5
 
         self.setup_lights()
@@ -82,10 +82,10 @@ class TowerCrash(ShowBase):
         self.scene.setup(self.physical_world)
         self.create_tower()
 
-        camera_z = (self.tower.inactive_top + 1) * 2.5
-        look_z = camera_z + 4 * 2.5
-        self.camera.setPos(Point3(10, -40, camera_z))
-        self.camera.lookAt(Point3(-2, 12, look_z))
+        # camera_z = (self.tower.inactive_top + 1) * 2.5
+        # look_z = camera_z + 4 * 2.5
+        # self.camera.setPos(Point3(10, -40, camera_z))
+        # self.camera.lookAt(Point3(-2, 12, look_z))
         self.camera_move_distance = 0
 
         self.ball = ColorBall(self.tower)
@@ -95,9 +95,9 @@ class TowerCrash(ShowBase):
         self.max_duration = 5
 
         # *******************************************
-        collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
-        self.physical_world.setDebugNode(collide_debug.node())
-        collide_debug.show()
+        # collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
+        # self.physical_world.setDebugNode(collide_debug.node())
+        # collide_debug.show()
         # *******************************************
 
         self.accept('mouse1', self.click)
@@ -105,8 +105,9 @@ class TowerCrash(ShowBase):
         self.taskMgr.add(self.update, 'update')
 
     def create_tower(self):
-        self.tower = CylinderTower(24, self.scene.foundation)
+        # self.tower = CylinderTower(24, self.scene.foundation)
         # self.tower = ThinTower(24, self.scene.foundation)
+        self.tower = TripleTower(1, self.scene.foundation)
         self.tower.build(self.physical_world)
 
     def setup_lights(self):
