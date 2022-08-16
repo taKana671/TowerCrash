@@ -242,21 +242,29 @@ class TripleTower(Tower):
         self.block_h = 2.5
         
     def build(self, physical_world):
-        edge = 1.1
+        edge = 2.6
         center = Point3(0, 12, 1.0)
         
-        pos = Point3(0, 0, self.block_h)
-        # triangle = TriangularPrism(self, pos + self.center, str(i * 7 + j), color, state)
-        triangle = TriangularPrism(self, pos + center, "0", Colors.select(), Block.ACTIVE)
-        physical_world.attachRigidBody(triangle.node())
-        self.blocks.data[0][0] = triangle
-
+        # pos = Point3(0, 0, self.block_h)
+        pos = Point3(0, edge * 0.5 / 1.73, self.block_h)
+        triangle2 = TriangularPrism(self, pos + center, "1", Colors.select(), Block.ACTIVE)
+        print(triangle2.getHpr())
+        physical_world.attachRigidBody(triangle2.node())
+        self.blocks.data[0][1] = triangle2    
         
-        pos = Point3(1 + edge, 0, self.block_h)
-        triangle = TriangularPrism(self, pos + center, "0", Colors.select(), Block.ACTIVE)
-        triangle.setH(180)
-        physical_world.attachRigidBody(triangle.node())
-        self.blocks.data[0][1] = triangle
+        pos = Point3(0, -(edge * 0.5 / 1.73), self.block_h)
+        # triangle = TriangularPrism(self, pos + self.center, str(i * 7 + j), color, state)
+        triangle1 = TriangularPrism(self, pos + self.center, '0', Colors.select(), Block.ACTIVE)
+        physical_world.attachRigidBody(triangle1.node())
+        # triangle1.setH(90)
+        triangle1.setR(180)
+        self.blocks.data[0][0] = triangle1
+        
+        # pos = Point3(0, -edge * 2, self.block_h)
+        # triangle2 = TriangularPrism(self, pos + center, "1", Colors.select(), Block.ACTIVE)
+        # triangle2.setH(180)
+        # physical_world.attachRigidBody(triangle2.node())
+        # self.blocks.data[0][1] = triangle2
 
     def rotate_around(self, angle):
         pass
@@ -314,34 +322,39 @@ class TriangularPrism(NodePath):
     def __init__(self, root, pos, name, color, state):
         super().__init__(BulletRigidBodyNode(name))
         self.reparentTo(root)
-        # tri = base.loader.loadModel('models/trianglular_prism/trianglular-prism')
-        # tri.reparentTo(self)
 
         # end, tip = tri.getTightBounds()
         # shape = BulletBoxShape((tip - end) / 2)
         # self.node().addShape(shape)
 
-        geom = base.loader.loadModel('models/trianglular_prism/trianglular-prism') \
-                .findAllMatches('**/+GeomNode')\
-                .getPath(0) \
-                .node()\
-                .getGeom(0)
+        tri = base.loader.loadModel('models/trianglular_prism/trianglular-prism')
+        geom = tri.findAllMatches('**/+GeomNode').getPath(0).node().getGeom(0)
+
         shape = BulletConvexHullShape()
-        shape.addGeom(geom)
+        shape.addGeom(geom, TransformState.makeScale(0.7))
+        # shape.addGeom(geom)
+        self.node().setMass(1.0)
         self.node().addShape(shape)
+        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
+        self.setP(-90)
+        self.setPos(pos)
+        # self.setScale(0.3)
+        self.setColor(color)
+        tri.setScale(0.2)
+        tri.reparentTo(self)
 
         # if int(name) % 10 == 0:
         #     self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
         # else:
         #     self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(4))
-        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
+        # self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
 
-        self.node().setMass(1)
-        self.setScale(0.5)
-        self.setColor(color)
-        self.setPos(pos)
+        # self.node().setMass(1)
+        # self.setScale(0.5)
+        # self.setColor(color)
+        # self.setPos(pos)
         self.state = state
         self.pos = pos
 
-        self.setP(-90)
+        # self.setP(-90)
 
