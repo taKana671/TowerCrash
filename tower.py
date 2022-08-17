@@ -20,11 +20,8 @@ class Block(Flag):
     ACTIVE = auto()
     INACTIVE = auto()
     INWATER = auto()
-    CRASH = auto()
 
-    ROTATABLE = ACTIVE | INACTIVE | CRASH
-    TARGET = ACTIVE | CRASH
-    MOVABLE = ACTIVE | CRASH
+    ROTATABLE = ACTIVE | INACTIVE
 
 
 GRAY = LColor(0.25, 0.25, 0.25, 1)
@@ -95,6 +92,7 @@ class Tower(NodePath):
         self.foundation = foundation
         self.blocks = blocks
         self.axis = Vec3.up()
+        self.center = Point3(-2, 12, 1.0)
         self.tower_top = stories - 1
         self.inactive_top = stories - 9
         # self.inactive_top = int(stories * 2 / 3) - 1
@@ -116,10 +114,6 @@ class Tower(NodePath):
     def is_collapsed(self, block, threshold=1.5):
         if abs(block.pos.getZ() - block.getZ()) > threshold:
             return True
-
-        # if self.calc_distance(block) > threshold:
-        #     # block.state = Block.CRASH
-        #     return True
         return False
 
     def set_active(self):
@@ -157,20 +151,20 @@ class CylinderTower(Tower):
 
     def __init__(self, stories, foundation):
         super().__init__(stories, foundation, Blocks(3, stories))
-        self.center = Point3(-2, 12, 1.0)
         self.block_h = 2.45
 
     def build(self, physical_world):
         edge = 1.5                     # the length of one side
+        half = edge / 2
         ok = edge / 2 / math.sqrt(3)   # the length of line OK, O: center of triangle
 
         for i in range(len(self.blocks)):
             h = (self.block_h * (i + 1))
 
             if i % 2 == 0:
-                points = [Point3(edge / 2, -ok, h), Point3(-edge / 2, -ok, h), Point3(0, ok * 2, h)]
+                points = [Point3(half, -ok, h), Point3(-half, -ok, h), Point3(0, ok * 2, h)]
             else:
-                points = [Point3(-edge / 2, ok, h), Point3(edge / 2, ok, h), Point3(0, -ok * 2, h)]
+                points = [Point3(-half, ok, h), Point3(half, ok, h), Point3(0, -ok * 2, h)]
 
             for j, pt in enumerate(points):
                 color, state = self.get_attrib(i)
@@ -191,16 +185,13 @@ class CylinderTower(Tower):
         for block in self.blocks:
             if block.state in Block.ROTATABLE:
                 r = q.xform(block.getPos() - self.center)
-                # block.pos = block.getPos()
                 block.setPos(self.center + r)
-                # block.setH(block.getH() + angle)
 
 
 class ThinTower(Tower):
 
     def __init__(self, stories, foundation):
         super().__init__(stories, foundation, Blocks(7, stories))
-        self.center = Point3(-2, 12, 1.0)
         self.block_h = 2.3
         self.even_row = [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]
         self.odd_row = [-2.75, -2, -1, 0, 1, 2, 2.75]
@@ -214,15 +205,14 @@ class ThinTower(Tower):
             for j, col in enumerate(cols):
                 color, state = self.get_attrib(i)
                 pos = Point3(edge * col, 0, h)
-                cube = Cube(self, pos + self.center, str(i * 7 + j), color, state)
-                if i % 2 and (j == 0 or j == len(cols) - 1):
-                    cube.setSx(cube.getSx() / 2)
-                physical_world.attachRigidBody(cube.node())
+                shrink = True if i % 2 and (j == 0 or j == len(cols) - 1) else False
+                rect = Rectangle(self, pos + self.center, str(i * 7 + j), color, state, shrink)
+                physical_world.attachRigidBody(rect.node())
 
                 if state == state.INACTIVE:
-                    cube.node().setMass(0)
+                    rect.node().setMass(0)
 
-                self.blocks[i, j] = cube
+                self.blocks[i, j] = rect
 
     def rotate_around(self, angle):
         self.foundation.setH(self.foundation.getH() + angle)
@@ -233,7 +223,6 @@ class ThinTower(Tower):
             for j in self.cols:
                 if (block := self.blocks[i, j]) and block.state in Block.ROTATABLE:
                     r = q.xform(block.getPos() - self.center)
-                    # block.pos = block.getPos()
                     block.setPos(self.center + r)
                     block.setH(block.getH() + angle)
 
@@ -242,24 +231,29 @@ class TripleTower(Tower):
 
     def __init__(self, stories, foundation):
         super().__init__(stories, foundation, Blocks(12, stories))
-        self.center = Point3(-2, 12, 1.0)
-        self.block_h = 2.23 # 2.23
+        self.block_h = 2.2  # 2.23
+        self.centers = [Point3(-2, 8, 1.0), Point3(1.5, 13, 1.0), Point3(-5, 14, 1.0)]
 
     def build(self, physical_world):
         edge = 2.536
-        ok = edge / 2 / math.sqrt(3)
+        half = edge / 2
+        ok = edge / 2 / math.sqrt(3)  # 0.7320801413324455
         first_h = 2.46
 
-        centers = [Point3(-2, 8, 1.0), Point3(1.5, 13, 1.0), Point3(-5, 14, 1.0)]
-
         for i in range(self.blocks.rows):
-            h = i * self.block_h + first_h 
-            points = [Point3(0, 0, h), Point3(edge / 2, -ok, h), Point3(-edge / 2, -ok, h), Point3(0, ok * 2, h)]
-            for j, (center, pt) in enumerate(itertools.product(centers, points)):
+            h = i * self.block_h + first_h
+            if i % 2:
+                points = [Point3(0, 0, h), Point3(half, -ok, h), Point3(-half, -ok, h), Point3(0, ok * 2, h)]
+                expand = False
+            else:
+                points = [Point3(0, 0, h)]
+                expand = True
+
+            for j, (center, pt) in enumerate(itertools.product(self.centers, points)):
+                print(i, j, i * 12 + j, center, pt)
                 color, state = self.get_attrib(i)
-                triangle = TriangularPrism(self, pt + center, str(i * 12 + j), color, state)
-                if not j % 4:
-                    triangle.setH(180)
+                reverse = True if i % 2 and not j % 4 else False
+                triangle = TriangularPrism(self, pt + center, str(i * 12 + j), color, state, expand, reverse)
                 physical_world.attachRigidBody(triangle.node())
 
                 if state == state.INACTIVE:
@@ -276,7 +270,6 @@ class TripleTower(Tower):
             for block in self.blocks(i):
                 if block.state in Block.ROTATABLE:
                     r = q.xform(block.getPos() - self.center)
-                    # block.pos = block.getPos()
                     block.setPos(self.center + r)
                     block.setH(block.getH() + angle)
 
@@ -290,11 +283,8 @@ class Cylinder(NodePath):
         cylinder.reparentTo(self)
         end, tip = cylinder.getTightBounds()
         self.node().addShape(BulletCylinderShape((tip - end) / 2))
-        if int(name) > 24:
-            self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(4))
-        else:
-            self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
-        # self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2))
+        n = 4 if int(name) > 24 else 3
+        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(n))
         self.node().setMass(1)
         self.setScale(0.7)
         self.setColor(color)
@@ -303,24 +293,20 @@ class Cylinder(NodePath):
         self.pos = pos
 
 
-class Cube(NodePath):
+class Rectangle(NodePath):
 
-    def __init__(self, root, pos, name, color, state):
+    def __init__(self, root, pos, name, color, state, shrink):
         super().__init__(BulletRigidBodyNode(name))
         self.reparentTo(root)
         cylinder = base.loader.loadModel(PATH_CUBE)
         cylinder.reparentTo(self)
         end, tip = cylinder.getTightBounds()
         self.node().addShape(BulletBoxShape((tip - end) / 2))
-
-        if int(name) % 10 == 0:
-            self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
-        else:
-            self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(4))
-
+        n = 3 if not int(name) % 10 else 4
+        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(n))
         self.node().setMass(1)
-        # self.setScale(0.7)
-        self.setScale(Vec3(0.7, 0.35, 0.7))
+        sx = 0.35 if shrink else 0.7
+        self.setScale(Vec3(sx, 0.35, 0.7))
         self.setColor(color)
         self.setPos(pos)
         self.state = state
@@ -329,32 +315,24 @@ class Cube(NodePath):
 
 class TriangularPrism(NodePath):
 
-    def __init__(self, root, pos, name, color, state):
+    def __init__(self, root, pos, name, color, state, expand, reverse):
         super().__init__(BulletRigidBodyNode(name))
         self.reparentTo(root)
-
-        # end, tip = tri.getTightBounds()
-        # shape = BulletBoxShape((tip - end) / 2)
-        # self.node().addShape(shape)
-
-        tri = base.loader.loadModel(PATH_TRIANGLE)
-        geom = tri.findAllMatches('**/+GeomNode').getPath(0).node().getGeom(0)
-
+        prism = base.loader.loadModel(PATH_TRIANGLE)
+        geom_scale = Vec3(1.4, 0.7, 1.4) if expand else 0.7
+        geom = prism.findAllMatches('**/+GeomNode').getPath(0).node().getGeom(0)
         shape = BulletConvexHullShape()
-        shape.addGeom(geom, TransformState.makeScale(0.71))
-        # shape.addGeom(geom)
+        shape.addGeom(geom, TransformState.makeScale(geom_scale))
         self.node().setMass(1.0)
         self.node().addShape(shape)
-
-        if int(name) % 10 == 0:
-            self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
-        else:
-            self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(4))
-
-        self.setP(-90)
+        n = 3 if int(name) % 20 == 0 else 4
+        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(n))
+        hpr = Vec3(180, -90, 0) if reverse else Vec3(0, -90, 0)
+        self.setHpr(hpr)
         self.setPos(pos)
         self.setColor(color)
-        tri.setScale(0.22)
-        tri.reparentTo(self)
+        prism_scale = Vec3(0.44, 0.22, 0.44) if expand else 0.22
+        prism.setScale(prism_scale)
+        prism.reparentTo(self)
         self.state = state
         self.pos = pos

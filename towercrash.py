@@ -95,9 +95,9 @@ class TowerCrash(ShowBase):
         self.max_duration = 5
 
         # *******************************************
-        collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
-        self.physical_world.setDebugNode(collide_debug.node())
-        collide_debug.show()
+        # collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
+        # self.physical_world.setDebugNode(collide_debug.node())
+        # collide_debug.show()
         # *******************************************
 
         self.accept('mouse1', self.click)
@@ -107,7 +107,7 @@ class TowerCrash(ShowBase):
     def create_tower(self):
         # self.tower = CylinderTower(24, self.scene.foundation)
         # self.tower = ThinTower(24, self.scene.foundation)
-        self.tower = TripleTower(16, self.scene.foundation)
+        self.tower = TripleTower(24, self.scene.foundation)
         self.tower.build(self.physical_world)
 
     def setup_lights(self):
@@ -140,7 +140,8 @@ class TowerCrash(ShowBase):
                 node_name = result.getNode().getName()
                 clicked_pos = result.getHitPos()
 
-                if (block := self.tower.blocks.find(node_name)).state in Block.TARGET:
+                # if (block := self.tower.blocks.find(node_name)).state in Block.TARGET:
+                if (block := self.tower.blocks.find(node_name)).state == Block.ACTIVE:
                     self.ball.state = Ball.MOVE
                     self.ball.move(clicked_pos, block)
 
@@ -173,7 +174,8 @@ class TowerCrash(ShowBase):
         # control dropped blocks
         for block in self.tower.blocks:
 
-            if block.state in Block.MOVABLE:
+            # if block.state in Block.MOVABLE:
+            if block.state == Block.ACTIVE:
                 result = self.physical_world.contactTest(block.node())
                 for contact in result.getContacts():
                     if (name := contact.getNode1().getName()) == self.scene.surface.name:
