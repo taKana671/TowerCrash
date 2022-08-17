@@ -12,6 +12,7 @@ from panda3d.core import Quat, Vec3, LColor, BitMask32, Point3
 
 PATH_CYLINDER = "models/cylinder/cylinder"
 PATH_CUBE = 'models/cube/cube'
+PATH_TRIANGLE = 'models/trianglular-prism/trianglular-prism'
 
 
 class Block(Flag):
@@ -113,9 +114,12 @@ class Tower(NodePath):
         return (dx ** 2 + dy ** 2 * dz ** 2) ** 0.5
 
     def is_collapsed(self, block, threshold=1.5):
-        if self.calc_distance(block) > threshold:
-            block.state = Block.CRASH
+        if abs(block.pos.getZ() - block.getZ()) > threshold:
             return True
+
+        # if self.calc_distance(block) > threshold:
+        #     # block.state = Block.CRASH
+        #     return True
         return False
 
     def set_active(self):
@@ -187,7 +191,7 @@ class CylinderTower(Tower):
         for block in self.blocks:
             if block.state in Block.ROTATABLE:
                 r = q.xform(block.getPos() - self.center)
-                block.pos = block.getPos()
+                # block.pos = block.getPos()
                 block.setPos(self.center + r)
                 # block.setH(block.getH() + angle)
 
@@ -229,7 +233,7 @@ class ThinTower(Tower):
             for j in self.cols:
                 if (block := self.blocks[i, j]) and block.state in Block.ROTATABLE:
                     r = q.xform(block.getPos() - self.center)
-                    block.pos = block.getPos()
+                    # block.pos = block.getPos()
                     block.setPos(self.center + r)
                     block.setH(block.getH() + angle)
 
@@ -237,41 +241,31 @@ class ThinTower(Tower):
 class TripleTower(Tower):
 
     def __init__(self, stories, foundation):
-        super().__init__(stories, foundation, Blocks(4, 1))
+        super().__init__(stories, foundation, Blocks(12, stories))
         self.center = Point3(-2, 12, 1.0)
-        self.block_h = 2.48
+        self.block_h = 2.23 # 2.23
 
     def build(self, physical_world):
         edge = 2.536
         ok = edge / 2 / math.sqrt(3)
-        h = 2.5
+        first_h = 2.46
 
-        points = [Point3(0, 0, h), Point3(edge / 2, -ok, h), Point3(-edge / 2, -ok, h), Point3(0, ok * 2, h)]
-        # points = [Point3(-edge / 2, -ok, h), Point3(0, ok * 2, h)]
+        centers = [Point3(-2, 8, 1.0), Point3(1.5, 13, 1.0), Point3(-5, 14, 1.0)]
 
-        center = Point3(-1, 15, 1.0)
-        for i, pos in enumerate(points):
-            triangle1 = TriangularPrism(self, pos + center, str(i), Colors.select(), Block.ACTIVE)
-            if i == 0:
-                triangle1.setH(180)
-            physical_world.attachRigidBody(triangle1.node())
-            self.blocks.data[0][i] = triangle1
+        for i in range(self.blocks.rows):
+            h = i * self.block_h + first_h 
+            points = [Point3(0, 0, h), Point3(edge / 2, -ok, h), Point3(-edge / 2, -ok, h), Point3(0, ok * 2, h)]
+            for j, (center, pt) in enumerate(itertools.product(centers, points)):
+                color, state = self.get_attrib(i)
+                triangle = TriangularPrism(self, pt + center, str(i * 12 + j), color, state)
+                if not j % 4:
+                    triangle.setH(180)
+                physical_world.attachRigidBody(triangle.node())
 
-        center = Point3(1, 10, 1.0)
-        for i, pos in enumerate(points):
-            triangle1 = TriangularPrism(self, pos + center, str(i), Colors.select(), Block.ACTIVE)
-            if i == 0:
-                triangle1.setH(180)
-            physical_world.attachRigidBody(triangle1.node())
-            self.blocks.data[0][i] = triangle1
+                if state == state.INACTIVE:
+                    triangle.node().setMass(0)
 
-        center = Point3(-5, 10, 1.0)
-        for i, pos in enumerate(points):
-            triangle1 = TriangularPrism(self, pos + center, str(i), Colors.select(), Block.ACTIVE)
-            if i == 0:
-                triangle1.setH(180)
-            physical_world.attachRigidBody(triangle1.node())
-            # self.blocks.data[0][i] = triangle1
+                self.blocks[i, j] = triangle
 
     def rotate_around(self, angle):
         self.foundation.setH(self.foundation.getH() + angle)
@@ -282,11 +276,9 @@ class TripleTower(Tower):
             for block in self.blocks(i):
                 if block.state in Block.ROTATABLE:
                     r = q.xform(block.getPos() - self.center)
-                    block.pos = block.getPos()
+                    # block.pos = block.getPos()
                     block.setPos(self.center + r)
                     block.setH(block.getH() + angle)
-
-
 
 
 class Cylinder(NodePath):
@@ -345,7 +337,7 @@ class TriangularPrism(NodePath):
         # shape = BulletBoxShape((tip - end) / 2)
         # self.node().addShape(shape)
 
-        tri = base.loader.loadModel('models/trianglular-prism/trianglular-prism')
+        tri = base.loader.loadModel(PATH_TRIANGLE)
         geom = tri.findAllMatches('**/+GeomNode').getPath(0).node().getGeom(0)
 
         shape = BulletConvexHullShape()
@@ -353,27 +345,16 @@ class TriangularPrism(NodePath):
         # shape.addGeom(geom)
         self.node().setMass(1.0)
         self.node().addShape(shape)
-        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
-        
+
+        if int(name) % 10 == 0:
+            self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
+        else:
+            self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(4))
+
         self.setP(-90)
         self.setPos(pos)
-        # self.setScale(0.3)
         self.setColor(color)
         tri.setScale(0.22)
         tri.reparentTo(self)
-
-        # if int(name) % 10 == 0:
-        #     self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
-        # else:
-        #     self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(4))
-        # self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(3))
-
-        # self.node().setMass(1)
-        # self.setScale(0.5)
-        # self.setColor(color)
-        # self.setPos(pos)
         self.state = state
         self.pos = pos
-
-        # self.setP(-90)
-

@@ -82,10 +82,10 @@ class TowerCrash(ShowBase):
         self.scene.setup(self.physical_world)
         self.create_tower()
 
-        # camera_z = (self.tower.inactive_top + 1) * 2.5
-        # look_z = camera_z + 4 * 2.5
-        # self.camera.setPos(Point3(10, -40, camera_z))
-        # self.camera.lookAt(Point3(-2, 12, look_z))
+        camera_z = (self.tower.inactive_top + 1) * 2.5
+        look_z = camera_z + 4 * 2.5
+        self.camera.setPos(Point3(10, -40, camera_z))
+        self.camera.lookAt(Point3(-2, 12, look_z))
         self.camera_move_distance = 0
 
         self.ball = ColorBall(self.tower)
@@ -95,9 +95,9 @@ class TowerCrash(ShowBase):
         self.max_duration = 5
 
         # *******************************************
-        # collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
-        # self.physical_world.setDebugNode(collide_debug.node())
-        # collide_debug.show()
+        collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
+        self.physical_world.setDebugNode(collide_debug.node())
+        collide_debug.show()
         # *******************************************
 
         self.accept('mouse1', self.click)
@@ -107,7 +107,7 @@ class TowerCrash(ShowBase):
     def create_tower(self):
         # self.tower = CylinderTower(24, self.scene.foundation)
         # self.tower = ThinTower(24, self.scene.foundation)
-        self.tower = TripleTower(1, self.scene.foundation)
+        self.tower = TripleTower(16, self.scene.foundation)
         self.tower.build(self.physical_world)
 
     def setup_lights(self):
@@ -191,7 +191,6 @@ class TowerCrash(ShowBase):
         distance = 0
         if cnt := self.tower.set_active():
             self.camera_move_distance += cnt * self.tower.block_h
-
         if self.camera_move_distance > 0:
             if self.camera.getZ() > self.camera_lowest_z:
                 distance += 10
