@@ -11,7 +11,7 @@ from panda3d.core import AmbientLight, DirectionalLight
 
 from bubble import Bubbles
 from scene import Scene
-from tower import CylinderTower, ThinTower, TripleTower, Colors, Block
+from tower import CylinderTower, ThinTower, TripleTower, TwinTower, Colors, Block
 
 
 PATH_SPHERE = "models/sphere/sphere"
@@ -107,7 +107,8 @@ class TowerCrash(ShowBase):
     def create_tower(self):
         # self.tower = CylinderTower(24, self.scene.foundation)
         # self.tower = ThinTower(24, self.scene.foundation)
-        self.tower = TripleTower(24, self.scene.foundation)
+        # self.tower = TripleTower(24, self.scene.foundation)
+        self.tower = TwinTower(16, self.scene.foundation)
         self.tower.build(self.physical_world)
 
     def setup_lights(self):
