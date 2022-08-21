@@ -69,7 +69,7 @@ class Sea(NodePath):
         sea = base.loader.loadModel(PATH_SEA)
         sea.reparentTo(self)
         self.setTransparency(TransparencyAttrib.M_alpha)
-        self.setScale(12)
+        self.setScale(13)
         self.setPos(-2, 0, 0.5)
         self.setColor(LColor(0.25, 0.41, 1, 0.3))
         self.setR(180)

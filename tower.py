@@ -133,16 +133,28 @@ class Tower(NodePath):
                 break
         return cnt
 
+        # for i in range(self.tower_top, -1, -1):
+        #     if all(self.is_collapsed(block) for block in self.blocks(i)):
+        #         for block in self.blocks(self.inactive_top):
+        #             block.state = Block.ACTIVE
+        #             block.clearColor()
+        #             block.setColor(Colors.select())
+        #             block.node().setMass(1)
+        #         if self.inactive_top >= 0:
+        #             self.inactive_top -= 1
+        #             cnt += 1
+        #         self.tower_top -= 1
+        #         continue
+        #     break
+        # return cnt
+
     def crash(self, block, clicked_pos):
-        n = random.randint(1, 5)
         block.node().setActive(True)
-        if n == 1:
+        if random.randint(1, 5) == 1:
             impulse = Vec3.forward() * random.randint(1, 5)
             block.node().applyImpulse(impulse, clicked_pos)
-        elif n == 2:
-            block.node().applyForce(Vec3.forward() * 10, clicked_pos)
         else:
-            block.node().applyCentralImpulse(Vec3.forward() * 10)
+            block.node().applyCentralImpulse(Vec3.forward() * 20)
 
     def rotate_around(self, angle):
         # Tried to use <nodepath>.setH() like self.foundation to rotate blocks,
@@ -161,25 +173,37 @@ class Tower(NodePath):
 class CylinderTower(Tower):
 
     def __init__(self, stories, foundation):
-        super().__init__(stories, foundation, Blocks(3, stories))
+        super().__init__(stories, foundation, Blocks(18, stories))
         self.block_h = 2.45
+        self.radius = 4
+        self.pts2d_even = [(x, y) for x, y in self.block_position(0, 360, 20)]
+        self.pts2d_odd = [(x, y) for x, y in self.block_position(10, 360, 20)]
+
+    def round_down(self, n):
+        str_n = str(n)
+        idx = str_n.find('.')
+        return float(str_n[:idx + 4])
+
+    def block_position(self, start, end, step):
+        for i in range(start, end, step):
+            rad = self.round_down(math.radians(i))
+            x = self.round_down(math.cos(rad) * self.radius)
+            y = self.round_down(math.sin(rad) * self.radius)
+            yield x, y
 
     def build(self, physical_world):
-        edge = 1.5                     # the length of one side
-        half = edge / 2
-        ok = edge / 2 / math.sqrt(3)   # the length of line OK, O: center of triangle
-
         for i in range(len(self.blocks)):
             h = (self.block_h * (i + 1))
 
             if i % 2 == 0:
-                points = [Point3(half, -ok, h), Point3(-half, -ok, h), Point3(0, ok * 2, h)]
+                points = [Point3(x, y, h) for x, y in self.pts2d_even]
             else:
-                points = [Point3(-half, ok, h), Point3(half, ok, h), Point3(0, -ok * 2, h)]
+                points = [Point3(x, y, h) for x, y in self.pts2d_odd]
 
             for j, pt in enumerate(points):
                 color, state = self.get_attrib(i)
-                cylinder = Cylinder(self, pt + self.center, str(i * 3 + j), color, state)
+                cylinder = Cylinder(
+                    self, pt + self.center, str(i * self.blocks.cols + j), color, state)
                 physical_world.attachRigidBody(cylinder.node())
 
                 if state == state.INACTIVE:
@@ -198,10 +222,17 @@ class TwinTower(Tower):
 
     def left_tower(self, i, half, h):
         if i % 2 == 0:
-            points = [Point3(-half, half, h), Point3(half, half, h), Point3(-half, -half, h), Point3(half, -half, h)]      
+            points = [
+                Point3(-half, half, h),
+                Point3(half, half, h),
+                Point3(-half, -half, h),
+                Point3(half, -half, h)
+            ]
             expand = False
         else:
-            points = [Point3(0, 0, h)]
+            points = [
+                Point3(0, 0, h)
+            ]
             expand = True
 
         for pt in points:
@@ -223,7 +254,7 @@ class TwinTower(Tower):
         yield from self.right_tower(i, ok, half, h)
 
     def build(self, physical_world):
-        edge = 1.5                    # the length of one side
+        edge = 1.5                     # the length of one side
         half = edge / 2
         ok = edge / 2 / math.sqrt(3)   # the length of line OK, O: center of triangle
 
@@ -231,7 +262,8 @@ class TwinTower(Tower):
             h = (self.block_h * (i + 1))
             for j, (center, pt, expand) in enumerate(self.block_position(i, ok, half, h)):
                 color, state = self.get_attrib(i)
-                cylinder = Cylinder(self, pt + center, str(i * 7 + j), color, state, expand)
+                cylinder = Cylinder(
+                    self, pt + center, str(i * self.blocks.cols + j), color, state, expand)
                 physical_world.attachRigidBody(cylinder.node())
 
                 if state == state.INACTIVE:
@@ -257,7 +289,8 @@ class ThinTower(Tower):
                 color, state = self.get_attrib(i)
                 pos = Point3(edge * col, 0, h)
                 shrink = True if i % 2 and j in {3, 6} else False
-                rect = Rectangle(self, pos + self.center, str(i * 7 + j), color, state, shrink)
+                rect = Rectangle(
+                    self, pos + self.center, str(i * self.blocks.cols + j), color, state, shrink)
                 physical_world.attachRigidBody(rect.node())
 
                 if state == state.INACTIVE:
@@ -282,16 +315,24 @@ class TripleTower(Tower):
         for i in range(self.blocks.rows):
             h = i * self.block_h + first_h
             if i % 2:
-                points = [Point3(0, 0, h), Point3(half, -ok, h), Point3(-half, -ok, h), Point3(0, ok * 2, h)]
+                points = [
+                    Point3(0, 0, h),
+                    Point3(half, -ok, h),
+                    Point3(-half, -ok, h),
+                    Point3(0, ok * 2, h)
+                ]
                 expand = False
             else:
-                points = [Point3(0, 0, h)]
+                points = [
+                    Point3(0, 0, h)
+                ]
                 expand = True
 
             for j, (center, pt) in enumerate(itertools.product(self.centers, points)):
                 color, state = self.get_attrib(i)
                 reverse = True if i % 2 and not j % 4 else False
-                triangle = TriangularPrism(self, pt + center, str(i * 12 + j), color, state, expand, reverse)
+                triangle = TriangularPrism(
+                    self, pt + center, str(i * self.blocks.cols + j), color, state, expand, reverse)
                 physical_world.attachRigidBody(triangle.node())
 
                 if state == state.INACTIVE:

@@ -1,11 +1,12 @@
 from enum import Enum, auto
 
+from direct.gui.DirectGui import OnscreenText, Plain
 from direct.interval.IntervalGlobal import Sequence, Parallel, Func
 from direct.showbase.ShowBaseGlobal import globalClock
 from direct.showbase.ShowBase import ShowBase
 from panda3d.bullet import BulletSphereShape
 from panda3d.bullet import BulletWorld, BulletDebugNode
-from panda3d.core import PandaNode, NodePath
+from panda3d.core import PandaNode, NodePath, TextNode
 from panda3d.core import Vec3, LColor, BitMask32, Point3
 from panda3d.core import AmbientLight, DirectionalLight
 
@@ -34,6 +35,14 @@ class ColorBall(NodePath):
         self.tower = tower
         self.state = None
         self.bubbles = Bubbles()
+        self.cnt = 0
+        self.ball_number = OnscreenText(
+            style=Plain,
+            pos=(-0.02, -0.98),
+            align=TextNode.ACenter,
+            scale=0.1,
+            mayChange=True
+        )
 
     def setup(self, camera_z):
         pos = Point3(5.5, -21, camera_z - 1.5)
@@ -41,6 +50,10 @@ class ColorBall(NodePath):
         self.setColor(Colors.select())
         self.reparentTo(base.render)
         self.state = Ball.READY
+        # show the number of throwing a ball.
+        self.cnt += 1
+        self.ball_number.reparentTo(base.aspect2d)
+        self.ball_number.setText(str(self.cnt))
 
     def _delete(self):
         self.detachNode()
@@ -48,13 +61,12 @@ class ColorBall(NodePath):
 
     def _hit(self, clicked_pos, block):
         para = Parallel(self.bubbles.get_sequence(self.getColor(), clicked_pos))
-
         if block.getColor() == self.getColor():
             para.append(Func(lambda: self.tower.crash(block, clicked_pos)))
-
         para.start()
 
     def move(self, clicked_pos, block):
+        self.ball_number.detachNode()
         Sequence(
             self.posInterval(0.5, clicked_pos),
             Func(self._delete),
@@ -67,11 +79,13 @@ class TowerCrash(ShowBase):
     def __init__(self):
         super().__init__()
         self.disableMouse()
-        self.camera.setPos(20, -18, 30)
-        # self.camera.setPos(10, -40, 20)  # 10, -40, 2.5
+        self.camera.setPos(-5, -120, 2.5)
+        # self.camera.setPos(20, -18, 30)
+        ## self.camera.setPos(10, -40, 20)  # 10, -40, 2.5
         self.camera.setP(10)
-        # self.camera.lookAt(5, 3, 5)  # 5, 0, 3
-        self.camera.lookAt(Point3(-2, 12, 2.5))  # 50
+        ## self.camera.lookAt(5, 3, 5)  # 5, 0, 3
+        # self.camera.lookAt(Point3(-2, 12, 2.5))  # 50
+        self.camera.lookAt(Point3(-2, 12, 30))
         self.camera_lowest_z = 2.5
 
         self.setup_lights()
@@ -107,8 +121,8 @@ class TowerCrash(ShowBase):
     def create_tower(self):
         # self.tower = CylinderTower(24, self.scene.foundation)
         # self.tower = ThinTower(24, self.scene.foundation)
-        # self.tower = TripleTower(24, self.scene.foundation)
-        self.tower = TwinTower(16, self.scene.foundation)
+        self.tower = TripleTower(24, self.scene.foundation)
+        # self.tower = TwinTower(24, self.scene.foundation)
         self.tower.build(self.physical_world)
 
     def setup_lights(self):
@@ -141,7 +155,6 @@ class TowerCrash(ShowBase):
                 node_name = result.getNode().getName()
                 clicked_pos = result.getHitPos()
 
-                # if (block := self.tower.blocks.find(node_name)).state in Block.TARGET:
                 if (block := self.tower.blocks.find(node_name)).state == Block.ACTIVE:
                     self.ball.state = Ball.MOVE
                     self.ball.move(clicked_pos, block)
