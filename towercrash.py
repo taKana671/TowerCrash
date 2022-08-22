@@ -6,7 +6,7 @@ from direct.showbase.ShowBaseGlobal import globalClock
 from direct.showbase.ShowBase import ShowBase
 from panda3d.bullet import BulletSphereShape
 from panda3d.bullet import BulletWorld, BulletDebugNode
-from panda3d.core import PandaNode, NodePath, TextNode
+from panda3d.core import PandaNode, NodePath, TextNode, TransparencyAttrib
 from panda3d.core import Vec3, LColor, BitMask32, Point3
 from panda3d.core import AmbientLight, DirectionalLight
 
@@ -31,8 +31,13 @@ class ColorBall(NodePath):
         super().__init__(PandaNode('ball'))
         ball = base.loader.loadModel(PATH_SPHERE)
         ball.reparentTo(self)
-        self.setScale(0.2)
+
+        self.setTransparency(TransparencyAttrib.M_alpha)
+
+        self.size = 0.2
+        self.setScale(self.size)
         self.tower = tower
+        self.is_white = False
         self.state = None
         self.bubbles = Bubbles()
         self.cnt = 0
@@ -47,9 +52,23 @@ class ColorBall(NodePath):
     def setup(self, camera_z):
         pos = Point3(5.5, -21, camera_z - 1.5)
         self.setPos(pos)
+
+        # color = Colors.select() if self.tower.inactive_top > -1 else Colors.select(6)
+        # self.setColor(color)
+
+        # if Colors.is_white(color):
+        #     self.is_white = True
+        #     self.setScale(self.size * 2)
+        # elif self.is_white:
+        #     self.setScale(self.size)
+        #     self.is_white = False
+        # if color == Colors.BLACK.rgba:
+        #     self.setScale(0.5)
+
         self.setColor(Colors.select())
         self.reparentTo(base.render)
         self.state = Ball.READY
+
         # show the number of throwing a ball.
         self.cnt += 1
         self.ball_number.reparentTo(base.aspect2d)
@@ -61,8 +80,13 @@ class ColorBall(NodePath):
 
     def _hit(self, clicked_pos, block):
         para = Parallel(self.bubbles.get_sequence(self.getColor(), clicked_pos))
+
+        if self.is_white:
+            p = Parallel(*[Func(self.tower.crash, block, clicked_pos) for block in self.tower.blocks if block.state == Block.ACTIVE])
+            para.append(p)
+
         if block.getColor() == self.getColor():
-            para.append(Func(lambda: self.tower.crash(block, clicked_pos)))
+            para.append(Func(self.tower.crash, block, clicked_pos))
         para.start()
 
     def move(self, clicked_pos, block):
@@ -120,8 +144,8 @@ class TowerCrash(ShowBase):
 
     def create_tower(self):
         # self.tower = CylinderTower(24, self.scene.foundation)
-        # self.tower = ThinTower(24, self.scene.foundation)
-        self.tower = TripleTower(24, self.scene.foundation)
+        self.tower = ThinTower(24, self.scene.foundation)
+        # self.tower = TripleTower(24, self.scene.foundation)
         # self.tower = TwinTower(24, self.scene.foundation)
         self.tower.build(self.physical_world)
 
