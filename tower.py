@@ -24,21 +24,26 @@ class Block(Flag):
     ROTATABLE = ACTIVE | INACTIVE
 
 
-GRAY = LColor(0.25, 0.25, 0.25, 1)
+class Colors(int, Enum):
 
+    RED = (0, LColor(1, 0, 0, 1))
+    BLUE = (1, LColor(0, 0, 1, 1))
+    YELLOW = (2, LColor(1, 1, 0, 1))
+    GREEN = (3, LColor(0, 0.5, 0, 1))
+    VIOLET = (4, LColor(0.54, 0.16, 0.88, 1))
+    MAGENTA = (5, LColor(1, 0, 1, 1))
+    GRAY = (6, LColor(0.25, 0.25, 0.25, 1))
 
-class Colors(Enum):
-
-    RED = LColor(1, 0, 0, 1)
-    BLUE = LColor(0, 0, 1, 1)
-    YELLOW = LColor(1, 1, 0, 1)
-    GREEN = LColor(0, 0.5, 0, 1)
-    VIOLET = LColor(0.54, 0.16, 0.88, 1)
-    MAGENTA = LColor(1, 0, 1, 1)
+    def __new__(cls, id_, rgba):
+        obj = int.__new__(cls, id_)
+        obj._value_ = id_
+        obj.rgba = rgba
+        return obj
 
     @classmethod
     def select(cls):
-        return random.choice([m.value for m in cls])
+        n = random.randint(0, 5)
+        return cls(n).rgba
 
 
 class Blocks:
@@ -99,7 +104,7 @@ class Tower(NodePath):
 
     def get_attrib(self, i):
         if i <= self.inactive_top:
-            return GRAY, Block.INACTIVE
+            return Colors.GRAY.rgba, Block.INACTIVE
         else:
             return Colors.select(), Block.ACTIVE
 
