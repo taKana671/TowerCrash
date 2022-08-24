@@ -20,8 +20,13 @@ class Block(Flag):
     ACTIVE = auto()
     INACTIVE = auto()
     INWATER = auto()
+    DROPPING = auto()
+    REPOSITIONED = auto()
 
-    ROTATABLE = ACTIVE | INACTIVE
+    MOVABLE = ACTIVE | DROPPING | REPOSITIONED
+    ROTATABLE = ACTIVE | INACTIVE | REPOSITIONED
+    CLICKABLE = ACTIVE | REPOSITIONED
+    COLLAPSED = DROPPING | INWATER | REPOSITIONED
 
 
 class Colors(int, Enum):
@@ -32,8 +37,7 @@ class Colors(int, Enum):
     GREEN = (3, LColor(0, 0.5, 0, 1))
     VIOLET = (4, LColor(0.54, 0.16, 0.88, 1))
     MAGENTA = (5, LColor(1, 0, 1, 1))
-    WHITE = (6, LColor(0.75, 0.75, 0.75, 1))
-    GRAY = (7, LColor(0.25, 0.25, 0.25, 1))
+    GRAY = (6, LColor(0.25, 0.25, 0.25, 1))
 
     def __new__(cls, id_, rgba):
         obj = int.__new__(cls, id_)
@@ -46,10 +50,6 @@ class Colors(int, Enum):
         n = random.randint(0, b)
         return cls(n).rgba
 
-    @classmethod
-    def is_white(cls, color):
-        return color == cls(6).rgba
-
 
 class Blocks:
 
@@ -59,7 +59,7 @@ class Blocks:
         self.data = [[None for _ in range(cols)] for _ in range(rows)]
 
     def __iter__(self):
-        for i, j in itertools.product(range(self.rows), range(self.cols)):
+        for i, j in itertools.product(reversed(range(self.rows)), range(self.cols)):
             if self.data[i][j]:
                 yield self.data[i][j]
 
@@ -130,7 +130,7 @@ class Tower(NodePath):
         cnt = 0
         if self.inactive_top >= 0:
             for i in range(self.tower_top, -1, -1):
-                if all(self.is_collapsed(block) for block in self.blocks(i)):
+                if all(block.state in Block.COLLAPSED for block in self.blocks(i)):
                     for block in self.blocks(self.inactive_top):
                         block.state = Block.ACTIVE
                         block.clearColor()
@@ -144,7 +144,7 @@ class Tower(NodePath):
         return cnt
 
         # for i in range(self.tower_top, -1, -1):
-        #     if all(self.is_collapsed(block) for block in self.blocks(i)):
+        #     if all(block.state in Block.COLLAPSED for block in self.blocks(i)):
         #         for block in self.blocks(self.inactive_top):
         #             block.state = Block.ACTIVE
         #             block.clearColor()
@@ -173,7 +173,8 @@ class Tower(NodePath):
         q = Quat()
         q.setFromAxisAngle(angle, self.axis.normalized())
 
-        for block in self.blocks:
+        # for block in self.blocks:
+        for block in (b for i in range(self.blocks.rows) for b in self.blocks(i)):
             if block.state in Block.ROTATABLE:
                 r = q.xform(block.getPos() - self.center)
                 block.setPos(self.center + r)

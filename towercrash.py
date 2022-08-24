@@ -6,7 +6,7 @@ from direct.showbase.ShowBaseGlobal import globalClock
 from direct.showbase.ShowBase import ShowBase
 from panda3d.bullet import BulletSphereShape
 from panda3d.bullet import BulletWorld, BulletDebugNode
-from panda3d.core import PandaNode, NodePath, TextNode, TransparencyAttrib
+from panda3d.core import PandaNode, NodePath, TextNode
 from panda3d.core import Vec3, LColor, BitMask32, Point3
 from panda3d.core import AmbientLight, DirectionalLight
 
@@ -16,6 +16,7 @@ from tower import CylinderTower, ThinTower, TripleTower, TwinTower, Colors, Bloc
 
 
 PATH_SPHERE = "models/sphere/sphere"
+CHECK_REPEAT = 0.2
 
 
 class Ball(Enum):
@@ -31,13 +32,8 @@ class ColorBall(NodePath):
         super().__init__(PandaNode('ball'))
         ball = base.loader.loadModel(PATH_SPHERE)
         ball.reparentTo(self)
-
-        self.setTransparency(TransparencyAttrib.M_alpha)
-
-        self.size = 0.2
-        self.setScale(self.size)
+        self.setScale(0.2)
         self.tower = tower
-        self.is_white = False
         self.state = None
         self.bubbles = Bubbles()
         self.cnt = 0
@@ -52,19 +48,6 @@ class ColorBall(NodePath):
     def setup(self, camera_z):
         pos = Point3(5.5, -21, camera_z - 1.5)
         self.setPos(pos)
-
-        # color = Colors.select() if self.tower.inactive_top > -1 else Colors.select(6)
-        # self.setColor(color)
-
-        # if Colors.is_white(color):
-        #     self.is_white = True
-        #     self.setScale(self.size * 2)
-        # elif self.is_white:
-        #     self.setScale(self.size)
-        #     self.is_white = False
-        # if color == Colors.BLACK.rgba:
-        #     self.setScale(0.5)
-
         self.setColor(Colors.select())
         self.reparentTo(base.render)
         self.state = Ball.READY
@@ -80,12 +63,7 @@ class ColorBall(NodePath):
 
     def _hit(self, clicked_pos, block):
         para = Parallel(self.bubbles.get_sequence(self.getColor(), clicked_pos))
-
-        if self.is_white:
-            p = Parallel(*[Func(self.tower.crash, block, clicked_pos) for block in self.tower.blocks if block.state == Block.ACTIVE])
-            para.append(p)
-
-        if block.getColor() == self.getColor():
+        if self.getColor() == block.getColor():
             para.append(Func(self.tower.crash, block, clicked_pos))
         para.start()
 
@@ -132,6 +110,8 @@ class TowerCrash(ShowBase):
         self.dragging_duration = 0
         self.max_duration = 5
 
+        self.next_check = 0
+
         # *******************************************
         # collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
         # self.physical_world.setDebugNode(collide_debug.node())
@@ -144,8 +124,8 @@ class TowerCrash(ShowBase):
 
     def create_tower(self):
         # self.tower = CylinderTower(24, self.scene.foundation)
-        self.tower = ThinTower(24, self.scene.foundation)
-        # self.tower = TripleTower(24, self.scene.foundation)
+        # self.tower = ThinTower(24, self.scene.foundation)
+        self.tower = TripleTower(24, self.scene.foundation)
         # self.tower = TwinTower(24, self.scene.foundation)
         self.tower.build(self.physical_world)
 
@@ -179,7 +159,7 @@ class TowerCrash(ShowBase):
                 node_name = result.getNode().getName()
                 clicked_pos = result.getHitPos()
 
-                if (block := self.tower.blocks.find(node_name)).state == Block.ACTIVE:
+                if (block := self.tower.blocks.find(node_name)).state in Block.CLICKABLE:
                     self.ball.state = Ball.MOVE
                     self.ball.move(clicked_pos, block)
 
@@ -195,8 +175,36 @@ class TowerCrash(ShowBase):
     def update(self, task):
         dt = globalClock.getDt()
 
-        velocity = 0
+        # control dropped blocks
+        if task.time >= self.next_check:
+            for block in self.tower.blocks:
+                if block.state == Block.INACTIVE:
+                    break
+                if block.state in Block.MOVABLE:
+                    if (diff := abs(block.pos.z - block.getPos().z)) > 0.3:  # ThinTower: 0.1 is good.
+                        block.pos = block.getPos()
+                        block.state = Block.DROPPING
+                    elif diff < 0.05 and block.state == Block.DROPPING:
+                        block.state = Block.REPOSITIONED
+                    elif block.state != Block.ACTIVE:
+                        block.pos = block.getPos()
+            self.next_check = task.time + CHECK_REPEAT
+
+        for block in self.tower.blocks:
+            if block.state == Block.INACTIVE:
+                break
+            if block.state in Block.MOVABLE:
+                result = self.physical_world.contactTest(block.node())
+                for contact in result.getContacts():
+                    if (name := contact.getNode1().getName()) == self.scene.surface.name:
+                        block.state = Block.INWATER
+                    elif name == self.scene.bottom.name:
+                        self.tower.blocks[block.node().getName()] = None
+                        self.physical_world.remove(block.node())
+                        block.removeNode()
+
         # control rotation of the tower
+        velocity = 0
         if self.dragging_duration:
             mouse_x = self.mouseWatcherNode.getMouse().getX()
             if (delta := mouse_x - self.mouse_x) < 0:
@@ -208,20 +216,6 @@ class TowerCrash(ShowBase):
 
         if self.dragging_duration >= self.max_duration:
             self.tower.rotate_around(velocity * dt)
-
-        # control dropped blocks
-        for block in self.tower.blocks:
-
-            # if block.state in Block.MOVABLE:
-            if block.state == Block.ACTIVE:
-                result = self.physical_world.contactTest(block.node())
-                for contact in result.getContacts():
-                    if (name := contact.getNode1().getName()) == self.scene.surface.name:
-                        block.state = Block.INWATER
-                    elif name == self.scene.bottom.name:
-                        self.tower.blocks[block.node().getName()] = None
-                        self.physical_world.remove(block.node())
-                        block.removeNode()
 
         # setup next ball
         if self.ball.state == Ball.DELETED:
@@ -256,4 +250,3 @@ if __name__ == '__main__':
     # cylinder.setPos(0, 0, 0)
     # cylinder.setColor(LColor(1, 0, 1, 1))
     # base.run()
-
