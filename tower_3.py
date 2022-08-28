@@ -5,10 +5,11 @@ from enum import Enum, Flag, auto
 
 from panda3d.bullet import BulletCylinderShape, BulletBoxShape, BulletConvexHullShape
 from panda3d.bullet import BulletRigidBodyNode
-from direct.interval.IntervalGlobal import Sequence, Func
+from direct.interval.IntervalGlobal import Sequence, Parallel, Func, Wait
 from panda3d.core import PandaNode, NodePath, TransformState
 from panda3d.core import Quat, Vec3, LColor, BitMask32, Point3
 
+from bubble import Bubbles
 
 PATH_CYLINDER = "models/cylinder/cylinder"
 PATH_CUBE = 'models/cube/cube'
@@ -25,7 +26,7 @@ class Block(Flag):
 
     MOVABLE = ACTIVE | DROPPING | REPOSITIONED
     ROTATABLE = ACTIVE | INACTIVE | REPOSITIONED
-    CLICKABLE = ACTIVE | REPOSITIONED
+    CLICKABLE = ACTIVE | DROPPING
     COLLAPSED = DROPPING | INWATER | REPOSITIONED
 
 
@@ -96,7 +97,7 @@ class Blocks:
 
 
 class Tower(NodePath):
-    def __init__(self, stories, foundation, world, blocks):
+    def __init__(self, world, stories, foundation, blocks):
         super().__init__(PandaNode('tower'))
         self.reparentTo(base.render)
         self.foundation = foundation
@@ -127,9 +128,9 @@ class Tower(NodePath):
             return True
         return False
 
+    # def set_active(self):
     def activate(self):
         cnt = 0
-
         for i in range(self.tower_top, -1, -1):
             if all(block.state in Block.COLLAPSED for block in self.blocks(i)):
                 for block in self.blocks(self.inactive_top):
@@ -144,6 +145,7 @@ class Tower(NodePath):
                 continue
             break
         return cnt
+
 
         # if self.inactive_top >= 0:
         #     for i in range(self.tower_top, -1, -1):
@@ -160,6 +162,7 @@ class Tower(NodePath):
         #         break
         # return cnt
 
+
     def crash(self, block, clicked_pos):
         block.node().setActive(True)
         if random.randint(1, 5) == 1:
@@ -168,30 +171,48 @@ class Tower(NodePath):
         else:
             block.node().applyCentralImpulse(Vec3.forward() * 20)
 
-    def rotate_around(self, angle):
-        # Tried to use <nodepath>.setH() like self.foundation to rotate blocks,
-        # but too slow.
-        self.foundation.setH(self.foundation.getH() + angle)
-        q = Quat()
-        q.setFromAxisAngle(angle, self.axis.normalized())
 
-        # for block in self.blocks:
-        for block in (b for i in range(self.blocks.rows) for b in self.blocks(i)):
-            if block.state in Block.ROTATABLE:
-                r = q.xform(block.getPos() - self.center)
-                block.setPos(self.center + r)
-                block.setH(block.getH() + angle)
+    def rotate(self, obj, rotation_angle):
+        q = Quat()
+        q.setFromAxisAngle(rotation_angle, self.axis.normalized())
+        r = q.xform(obj.getPos() - self.center)
+        rotated_pos = self.center + r
+        return rotated_pos
+
+
+
+    # def rotate_around(self, angle):
+    #     # Tried to use <nodepath>.setH() like self.foundation to rotate blocks,
+    #     # but too slow.
+    #     self.foundation.setH(self.foundation.getH() + angle)
+    #     q = Quat()
+    #     q.setFromAxisAngle(angle, self.axis.normalized())
+
+    #     # for block in self.blocks:
+    #     for block in (b for i in range(self.blocks.rows) for b in self.blocks(i)):
+    #         if block.state in Block.ROTATABLE:
+    #             r = q.xform(block.getPos() - self.center)
+    #             block.setPos(self.center + r)
+    #             block.setH(block.getH() + angle)
 
     def clean_up(self, block):
         self.blocks[block.node().getName()] = None
         self.world.remove(block.node())
         block.removeNode()
 
+    def clean_up_all(self):
+        bubbles = Bubbles()
+        for block in self.blocks:
+            color = block.getColor()
+            self.clean_up(block)
+        seq = bubbles.get_sequence(color, Point3(-2, 12, 3.5)) 
+        seq.start()
+
 
 class CylinderTower(Tower):
 
     def __init__(self, stories, foundation, world):
-        super().__init__(stories, foundation, world, Blocks(18, stories))
+        super().__init__(world, stories, foundation, Blocks(18, stories))
         self.block_h = 2.45
         self.radius = 4
         self.pts2d_even = [(x, y) for x, y in self.block_position(0, 360, 20)]
@@ -233,7 +254,7 @@ class CylinderTower(Tower):
 class TwinTower(Tower):
 
     def __init__(self, stories, foundation, world):
-        super().__init__(stories, foundation, world, Blocks(7, stories))
+        super().__init__(world, stories, foundation, Blocks(7, stories))
         self.block_h = 2.45
         self.l_center = Point3(-5, 12, 1.0)
         self.r_center = Point3(1, 12, 1.0)
@@ -293,7 +314,7 @@ class TwinTower(Tower):
 class ThinTower(Tower):
 
     def __init__(self, stories, foundation, world):
-        super().__init__(stories, foundation, world, Blocks(7, stories))
+        super().__init__(world, stories, foundation, Blocks(7, stories))
         self.block_h = 2.3
         self.even_row = [-0.5, -1.5, -2.5, 0.5, 1.5, 2.5]
         self.odd_row = [0, -1, -2, -2.75, 1, 2, 2.75]
@@ -320,7 +341,7 @@ class ThinTower(Tower):
 class TripleTower(Tower):
 
     def __init__(self, stories, foundation, world):
-        super().__init__(stories, foundation, world, Blocks(12, stories))
+        super().__init__(world, stories, foundation, Blocks(12, stories))
         self.block_h = 2.2  # 2.23
         self.centers = [Point3(-2, 8, 1.0), Point3(1.5, 13, 1.0), Point3(-5, 14, 1.0)]
 

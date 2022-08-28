@@ -46,7 +46,7 @@ class Bubbles:
     def get_sequence(self, color, pos):
         bubbles = NodePath(PandaNode('bubbles'))
         bubbles.reparentTo(base.render)
-        
+
         return Sequence(
             Parallel(*(seq for seq in self.create_seq(bubbles, color, pos))),
             Func(lambda: bubbles.removeNode())
