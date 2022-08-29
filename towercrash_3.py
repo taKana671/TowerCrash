@@ -65,35 +65,22 @@ class ColorBall(NodePath):
         self.ball_number.reparentTo(base.aspect2d)
         self.ball_number.setText(str(self.cnt))
     
-    
-    # def setup(self, camera_z):
-    #     pos = Point3(5.5, -21, camera_z - 1.5)
-    #     self.setPos(pos)
-    #     self.setColor(Colors.select())
-    #     self.reparentTo(base.render)
-    #     self.state = Ball.READY
-
-    #     # show the number of throwing a ball.
-    #     self.cnt += 1
-    #     self.ball_number.reparentTo(base.aspect2d)
-    #     self.ball_number.setText(str(self.cnt))
-
     def _delete(self):
         self.detachNode()
         self.state = Ball.DELETED
 
-    def _hit(self, clicked_pos, block):
+    def _hit(self, clicked_pos, block, v):
         para = Parallel(self.bubbles.get_sequence(self.getColor(), clicked_pos))
         if self.getColor() == block.getColor():
-            para.append(Func(self.tower.crash, block, clicked_pos))
+            para.append(Func(self.tower.crash, block, clicked_pos, v))
         para.start()
 
-    def move(self, clicked_pos, block):
+    def move(self, clicked_pos, block, camera_pos):
         self.ball_number.detachNode()
         Sequence(
             self.posInterval(0.5, clicked_pos),
             Func(self._delete),
-            Func(self._hit, clicked_pos, block)
+            Func(self._hit, clicked_pos, block, camera_pos)
         ).start()
 
     def reposition(self, rotation_angle=None, vertical_distance=None):
@@ -103,11 +90,6 @@ class ColorBall(NodePath):
         if vertical_distance:
             self.pos.z -= vertical_distance
             self.setZ(self.pos.z)
-
-
-
-
-
 
 
 class TowerCrash(ShowBase):
@@ -147,7 +129,7 @@ class TowerCrash(ShowBase):
 
         self.next_check = 0
         self.state = Game.PLAY
-        self.start_screen = StartScreen()
+        # self.start_screen = StartScreen()
 
         # *******************************************
         # collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
@@ -161,9 +143,9 @@ class TowerCrash(ShowBase):
 
     def create_tower(self):
         # self.tower = CylinderTower(24, self.scene.foundation, self.physical_world)
-        self.tower = ThinTower(16, self.scene.foundation, self.physical_world)
+        self.tower = ThinTower(24, self.scene.foundation, self.physical_world)
         # self.tower = TripleTower(24, self.scene.foundation, self.physical_world)
-        # self.tower = TwinTower(24, self.scene.foundation, self.physical_world)
+        self.tower = TwinTower(16, self.scene.foundation, self.physical_world)
         self.tower.build()
 
     def setup_lights(self):
@@ -197,9 +179,8 @@ class TowerCrash(ShowBase):
                 clicked_pos = result.getHitPos()
 
                 if (block := self.tower.blocks.find(node_name)).state in Block.CLICKABLE:
-                    print('cameraH', self.camera.getH())
                     self.ball.state = Ball.MOVE
-                    self.ball.move(clicked_pos, block)
+                    self.ball.move(clicked_pos, block, self.camera.getPos())
 
                 print('node_name', node_name)
                 print('collision_pt', clicked_pos)
@@ -224,7 +205,10 @@ class TowerCrash(ShowBase):
         dt = globalClock.getDt()
 
         # if self.state == Game.PLAY and self.tower.tower_top <= 0:
-        #     print('gameover')
+        #     if all(b.state in {Block.DROPPING, Block.REPOSITIONED} for b in self.tower.blocks):
+        #         print('gameover')
+
+        #         print('gameover')
         #     self.timer = task.time + 0.3
         #     self.state = Game.GAMEOVER
 
@@ -233,30 +217,19 @@ class TowerCrash(ShowBase):
         #     # self.tower.clean_up_all()
         #     self.state = None
 
-
-        # change the state of falling blocks
-        # if task.time >= self.next_check:
-        #     for block in self.tower.blocks:
-        #         if block.state == Block.INACTIVE:
-        #             break
-        #         if block.state in Block.MOVABLE:
-        #             if (diff := abs(block.pos.z - block.getPos().z)) > 0.3:  # ThinTower: 0.1 is good.
-        #                 block.pos = block.getPos()
-        #                 block.state = Block.DROPPING
-        #             elif diff < 0.05 and block.state == Block.DROPPING:
-        #                 block.state = Block.REPOSITIONED
-        #             elif block.state != Block.ACTIVE:
-        #                 block.pos = block.getPos()
-        #     self.next_check = task.time + CHECK_REPEAT
-
+        # control falling blocks
         if task.time >= self.next_check:
             for block in self.tower.blocks:
                 if block.state == Block.INACTIVE:
                     break
-                if block.state == Block.ACTIVE:
-                    if abs(block.pos.z - block.getPos().z) > 0.3:  # ThinTower: 0.1 is good.
-                        block.pos = block.getPos()
+                if block.state in Block.MOVABLE:
+                    if (diff := abs(block.pos.z - block.getPos().z)) > 0.3:  # ThinTower: 0.1 is good.
+                        # block.pos = block.getPos()
                         block.state = Block.DROPPING
+                    elif diff < 0.05 and block.state == Block.DROPPING:
+                        block.state = Block.REPOSITIONED
+                    if block.state != Block.ACTIVE:
+                        block.pos = block.getPos()
             self.next_check = task.time + CHECK_REPEAT
 
         # control the blocks collided with a surface or a bottom.
@@ -285,6 +258,11 @@ class TowerCrash(ShowBase):
             self.mouse_x = mouse_x
             self.dragging_duration += 1
 
+        if self.state == Game.PLAY and self.tower.tower_top <= 0:
+            if all(b.state in {Block.INWATER, Block.REPOSITIONED, Block.ACTIVE} for b in self.tower.blocks):
+                print('gameover')
+
+
         # control the vertical position of camera.
         distance = 0
         self.camera_move_distance += self.tower.activate() * self.tower.block_h
@@ -299,47 +277,6 @@ class TowerCrash(ShowBase):
             self.ball.reposition(angle, distance)
         if self.ball.state == Ball.DELETED:
             self.ball.setup(self.camera.getZ())
-
-
-
-
-
-    
-        # # control the rotation of tower.
-        # velocity = 0
-        # if self.dragging_duration:
-        #     mouse_x = self.mouseWatcherNode.getMouse().getX()
-        #     if (delta := mouse_x - self.mouse_x) < 0:
-        #         velocity -= 90
-        #     elif delta > 0:
-        #         velocity += 90
-        #     self.mouse_x = mouse_x
-        #     self.dragging_duration += 1
-
-        # if self.dragging_duration >= self.max_duration:
-        #     # print('before rotation', self.camera.getHpr())
-        #     self.control_camera(velocity * dt)
-        #     # self.tower.rotate_around(velocity * dt)
-        #     # print('after rotation', self.camera.getHpr())
-
-        # # setup the next ball
-        # if self.ball.state == Ball.DELETED:
-        #     self.ball.setup(self.camera.getZ())
-
-        # # control the camera position
-        # distance = 0
-        # if cnt := self.tower.set_active():
-        #     self.camera_move_distance += cnt * self.tower.block_h
-        # if self.camera_move_distance > 0:
-        #     if self.camera.getZ() > self.camera_lowest_z:
-        #         distance += 10
-        #         self.camera_move_distance -= distance * dt
-        #         self.camera.setZ(self.camera.getZ() - distance * dt)
-
-        #         # print('changed height', self.camera.getHpr())
-
-        #         if self.ball.state == Ball.READY:
-        #             self.ball.setZ(self.ball.getZ() - distance * dt)
 
         self.physical_world.doPhysics(dt)
         return task.cont

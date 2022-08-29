@@ -26,7 +26,7 @@ class Block(Flag):
 
     MOVABLE = ACTIVE | DROPPING | REPOSITIONED
     ROTATABLE = ACTIVE | INACTIVE | REPOSITIONED
-    CLICKABLE = ACTIVE | DROPPING
+    CLICKABLE = ACTIVE | REPOSITIONED
     COLLAPSED = DROPPING | INWATER | REPOSITIONED
 
 
@@ -128,7 +128,6 @@ class Tower(NodePath):
             return True
         return False
 
-    # def set_active(self):
     def activate(self):
         cnt = 0
         for i in range(self.tower_top, -1, -1):
@@ -146,7 +145,6 @@ class Tower(NodePath):
             break
         return cnt
 
-
         # if self.inactive_top >= 0:
         #     for i in range(self.tower_top, -1, -1):
         #         if all(block.state in Block.COLLAPSED for block in self.blocks(i)):
@@ -163,14 +161,15 @@ class Tower(NodePath):
         # return cnt
 
 
-    def crash(self, block, clicked_pos):
+    def crash(self, block, clicked_pos, camera_pos):
+        vec = Vec3(-camera_pos.x, -camera_pos.y, camera_pos.z).normalized()
         block.node().setActive(True)
+
         if random.randint(1, 5) == 1:
-            impulse = Vec3.forward() * random.randint(1, 5)
+            impulse = vec * random.randint(1, 5)
             block.node().applyImpulse(impulse, clicked_pos)
         else:
-            block.node().applyCentralImpulse(Vec3.forward() * 20)
-
+            block.node().applyCentralImpulse(vec * 20)
 
     def rotate(self, obj, rotation_angle):
         q = Quat()
@@ -178,22 +177,6 @@ class Tower(NodePath):
         r = q.xform(obj.getPos() - self.center)
         rotated_pos = self.center + r
         return rotated_pos
-
-
-
-    # def rotate_around(self, angle):
-    #     # Tried to use <nodepath>.setH() like self.foundation to rotate blocks,
-    #     # but too slow.
-    #     self.foundation.setH(self.foundation.getH() + angle)
-    #     q = Quat()
-    #     q.setFromAxisAngle(angle, self.axis.normalized())
-
-    #     # for block in self.blocks:
-    #     for block in (b for i in range(self.blocks.rows) for b in self.blocks(i)):
-    #         if block.state in Block.ROTATABLE:
-    #             r = q.xform(block.getPos() - self.center)
-    #             block.setPos(self.center + r)
-    #             block.setH(block.getH() + angle)
 
     def clean_up(self, block):
         self.blocks[block.node().getName()] = None
