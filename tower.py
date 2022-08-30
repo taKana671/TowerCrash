@@ -188,6 +188,31 @@ class Tower(NodePath):
         seq = bubbles.get_sequence(color, Point3(-2, 12, 3.5)) 
         seq.start()
 
+    def water_surface(self, block_names):
+        for name in block_names:
+            block = self.blocks.find(name)
+            if block.state != Block.INWATER:
+                block.state = Block.INWATER
+                block.node().deactivation_enabled = True
+
+    def water_bottom(self, block_names):
+        for name in block_names:
+            block = self.blocks.find(name)
+            self.clean_up(block)
+
+
+    def get_neighbors(self, block, color, blocks):
+        result = self.world.contactTest(block.node())
+        
+        for name in set(c.getNode1().getName() for c in result.getContacts()):
+            neighbor = self.blocks.find(name)
+            if neighbor not in blocks and neighbor.getColor() == color:
+                blocks.append(neighbor)
+                self.get_neighbors(neighbor, color, blocks)
+
+
+
+
 
 class CylinderTower(Tower):
 

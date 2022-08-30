@@ -1,3 +1,4 @@
+from collections import namedtuple
 from enum import Enum, auto
 
 from direct.gui.DirectGui import OnscreenText, Plain
@@ -17,6 +18,9 @@ from tower import CylinderTower, ThinTower, TripleTower, TwinTower, Colors, Bloc
 
 PATH_SPHERE = "models/sphere/sphere"
 CHECK_REPEAT = 0.2
+
+
+Click = namedtuple('Click', 'pos block')
 
 
 class Ball(Enum):
@@ -64,33 +68,38 @@ class ColorBall(NodePath):
         self.cnt += 1
         self.ball_number.reparentTo(base.aspect2d)
         self.ball_number.setText(str(self.cnt))
-    
+
     def _delete(self):
         self.detachNode()
         self.state = Ball.DELETED
 
-    def _hit(self, clicked_pos, block, v):
+    def _hit(self, clicked_pos, blocks):
         para = Parallel(self.bubbles.get_sequence(self.getColor(), clicked_pos))
-        if self.getColor() == block.getColor():
+        for block in blocks:
+            pos = block.getPos()
+            para.extend([
+                Func(self.tower.clean_up, block),
+                self.bubbles.get_sequence(self.getColor(), pos)
+            ])
+            
             # para.append(Func(self.tower.crash, block, clicked_pos, v))
-            para.append(Func(self.tower.clean_up, block))
+            # para.append(Func(self.tower.clean_up, block))
         para.start()
 
-    def move(self, clicked_pos, block, camera_pos, world):
-        result = world.contactTest(block.node())
-        print(block.node().getName())
-        for contact in result.getContacts():
-            name = contact.getNode1().getName()
-            b = self.tower.blocks.find(name) 
-            print(name, b.getColor())
-                        
-
-
+    def move(self, clicked_pos, block):
+        self.state = Ball.MOVE
+        
+        blocks = []
+        if self.getColor() == block.getColor():
+            blocks.append(block)
+            self.tower.get_neighbors(block, block.getColor(), blocks)
+        
         self.ball_number.detachNode()
+        
         Sequence(
             self.posInterval(0.5, clicked_pos),
             Func(self._delete),
-            Func(self._hit, clicked_pos, block, camera_pos)
+            Func(self._hit, clicked_pos, blocks)
         ).start()
 
     def reposition(self, rotation_angle=None, vertical_distance=None):
@@ -139,16 +148,17 @@ class TowerCrash(ShowBase):
 
         self.next_check = 0
         self.state = Game.PLAY
+        self.click = None
         # self.start_screen = StartScreen()
 
         # *******************************************
-        collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
-        self.physical_world.setDebugNode(collide_debug.node())
-        collide_debug.show()
+        # collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
+        # self.physical_world.setDebugNode(collide_debug.node())
+        # collide_debug.show()
         # *******************************************
 
-        self.accept('mouse1', self.click)
-        self.accept('mouse1-up', self.release)
+        self.accept('mouse1', self.mouse_click)
+        self.accept('mouse1-up', self.mouse_release)
         self.taskMgr.add(self.update, 'update')
 
     def create_tower(self):
@@ -172,8 +182,9 @@ class TowerCrash(ShowBase):
         self.render.setShaderAuto()
         self.render.setLight(directional_light)
 
-    def click(self):
-        self.dragging_duration = 0
+    def mouse_click(self):
+    # def control_mouse(self):
+        # self.dragging_duration = 0
 
         if self.mouseWatcherNode.hasMouse():
             mouse_pos = self.mouseWatcherNode.getMouse()
@@ -189,8 +200,10 @@ class TowerCrash(ShowBase):
                 clicked_pos = result.getHitPos()
 
                 if (block := self.tower.blocks.find(node_name)).state in Block.CLICKABLE:
-                    self.ball.state = Ball.MOVE
-                    self.ball.move(clicked_pos, block, self.camera.getPos(), self.physical_world)
+                    self.click = Click(clicked_pos, block)
+                    # self.ball.state = Ball.MOVE
+                    # self.ball.move(clicked_pos, block)
+                    # self.ball.move(clicked_pos, block, self.camera.getPos(), self.physical_world)
 
                 print('node_name', node_name)
                 print('collision_pt', clicked_pos)
@@ -198,7 +211,7 @@ class TowerCrash(ShowBase):
                 self.mouse_x = 0
                 self.dragging_duration += 1
 
-    def release(self):
+    def mouse_release(self):
         self.dragging_duration = 0
 
     def rotate_camera(self, rotation_angle):
@@ -227,6 +240,11 @@ class TowerCrash(ShowBase):
         #     # self.tower.clean_up_all()
         #     self.state = None
 
+        if self.click:
+            # self.ball.state = Ball.MOVE
+            self.ball.move(*self.click)
+            self.click = None
+        
         # control falling blocks
         if task.time >= self.next_check:
             for block in self.tower.blocks:
@@ -243,19 +261,14 @@ class TowerCrash(ShowBase):
             self.next_check = task.time + CHECK_REPEAT
 
         # control the blocks collided with a surface or a bottom.
-        for block in self.tower.blocks:
-            if block.state == Block.INACTIVE:
-                break
-            if block.state in Block.MOVABLE:
-                result = self.physical_world.contactTest(block.node())
-                for contact in result.getContacts():
-                    if (name := contact.getNode1().getName()) == self.scene.surface.name:
-                        
-                        block.node().deactivation_enabled = True
+        result = self.physical_world.contactTest(self.scene.surface.node())
+        self.tower.water_surface(
+            set(contact.getNode0().getName() for contact in result.getContacts()))
 
-                        block.state = Block.INWATER
-                    elif name == self.scene.bottom.name:
-                        self.tower.clean_up(block)
+        result = self.physical_world.contactTest(self.scene.bottom.node())
+        self.tower.water_bottom(
+            set(contact.getNode0().getName() for contact in result.getContacts()))
+
 
         # control the rotation of camera.
         angle = 0
