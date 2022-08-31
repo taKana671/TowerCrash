@@ -21,14 +21,7 @@ class Block(Flag):
     ACTIVE = auto()
     INACTIVE = auto()
     INWATER = auto()
-    DROP = auto()
-    REPOSITIONED = auto()
-
-    MOVABLE = ACTIVE | DROP | REPOSITIONED
-    ROTATABLE = ACTIVE | INACTIVE | REPOSITIONED
-    CLICKABLE = ACTIVE | DROP
-    COLLAPSED = DROP | INWATER | REPOSITIONED
-
+    
 
 class Colors(int, Enum):
 
@@ -115,46 +108,46 @@ class Tower(NodePath):
         else:
             return Colors.select(), Block.ACTIVE
 
-    def calc_distance(self, block):
-        now_pos = block.getPos()
-        dx = block.pos.x - now_pos.x
-        dy = block.pos.y - now_pos.y
-        dz = block.pos.z - now_pos.z
-
-        return (dx ** 2 + dy ** 2 * dz ** 2) ** 0.5
-
     def activate(self):
-        # cnt = 0
-        # for i in range(self.tower_top, self.inactive_top, -1):
-        #     if all(block.state == Block.DROP for block in self.blocks(i)):
-        #         for block in self.blocks(self.inactive_top):
-        #             block.state = Block.ACTIVE
-        #             block.clearColor()
-        #             block.setColor(Colors.select())
-        #             block.node().deactivation_enabled = False
-        #             block.node().setMass(1)
-        #         if self.inactive_top >= 0:
+        activate_rows = 0
+        top_block = max(
+            (b for b in self.blocks if b.state == Block.ACTIVE),
+            key=lambda x: x.getZ()
+        )
+        tower_top_now = int(top_block.getZ() / self.block_h) - 1
+
+        if self.inactive_top >= 0:
+            if activate_rows := self.tower_top - tower_top_now:
+                for _ in range(activate_rows):
+                    for block in self.blocks(self.inactive_top):
+                        block.state = Block.ACTIVE
+                        block.clearColor()
+                        block.setColor(Colors.select())
+                        block.node().deactivation_enabled = False
+                        block.node().setMass(1)
+                self.inactive_top -= activate_rows
+        self.tower_top = tower_top_now
+
+        return activate_rows
+
+        # activate_rows = 0
+
+        # if self.inactive_top >= 0:
+        #     top_block = max((b for b in self.blocks if b.state == Block.ACTIVE), key=lambda x: x.getZ())
+        #     tower_top_now = int(top_block.getZ() / self.block_h) - 1
+
+        #     if activate_rows := self.tower_top - tower_top_now:
+        #         for _ in range(activate_rows):
+        #             for block in self.blocks(self.inactive_top):
+        #                 block.state = Block.ACTIVE
+        #                 block.clearColor()
+        #                 block.setColor(Colors.select())
+        #                 block.node().deactivation_enabled = False
+        #                 block.node().setMass(1)
+        #             # if self.inactive_top >= 0:
         #             self.inactive_top -= 1
-        #             cnt += 1
-        #         self.tower_top -= 1
-        #         break
-        # return cnt
-        cnt = 0
-        for i in range(self.tower_top, self.inactive_top, -1):
-            if all(block is None or block.state in Block.COLLAPSED for block in self.blocks(i)):
-                for block in self.blocks(self.inactive_top):
-                    block.state = Block.ACTIVE
-                    block.clearColor()
-                    block.setColor(Colors.select())
-                    block.node().deactivation_enabled = False
-                    block.node().setMass(1)
-                if self.inactive_top >= 0:
-                    self.inactive_top -= 1
-                    cnt += 1
-                self.tower_top -= 1
-                continue
-            break
-        return cnt
+        #         self.tower_top -= activate_rows
+        # return activate_rows
 
     def rotate(self, obj, rotation_angle):
         q = Quat()
@@ -316,9 +309,8 @@ class ThinTower(Tower):
                 rect = Rectangle(
                     self, pos + self.center, str(i * self.blocks.cols + j), color, state, shrink)
                 self.world.attachRigidBody(rect.node())
-
                 rect.node().deactivation_enabled = False
-                # rect.node().setActive(False)
+
                 if state == state.INACTIVE:
                     rect.node().setMass(0)
                     rect.node().deactivation_enabled = True

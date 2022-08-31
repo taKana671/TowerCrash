@@ -162,7 +162,7 @@ class TowerCrash(ShowBase):
 
     def create_tower(self):
         # self.tower = CylinderTower(24, self.scene.foundation, self.world)
-        self.tower = ThinTower(24, self.scene.foundation, self.world)
+        self.tower = ThinTower(16, self.scene.foundation, self.world)
         # self.tower = TripleTower(24, self.scene.foundation, self.world)
         # self.tower = TwinTower(24, self.scene.foundation, self.world)
         self.tower.build()
@@ -195,7 +195,7 @@ class TowerCrash(ShowBase):
                 node_name = result.getNode().getName()
                 clicked_pos = result.getHitPos()
 
-                if (block := self.tower.blocks.find(node_name)).state in Block.CLICKABLE:
+                if (block := self.tower.blocks.find(node_name)).state == Block.ACTIVE:
                     self.click = Click(clicked_pos, block)
 
                 print('node_name', node_name)
@@ -207,7 +207,7 @@ class TowerCrash(ShowBase):
     def mouse_release(self):
         self.wait_rotation = 0
 
-    def control_camera(self, dt, activated_cnt):
+    def control_camera(self, dt, activated_rows):
         # control the rotation of camera.
         angle = 0
         if self.wait_rotation:
@@ -225,7 +225,7 @@ class TowerCrash(ShowBase):
 
         # control the vertical position of camera.
         distance = 0
-        self.camera_move_distance += activated_cnt * self.tower.block_h
+        self.camera_move_distance += activated_rows * self.tower.block_h
         if self.camera_move_distance > 0:
             if self.camera.getZ() > self.camera_lowest_z:
                 distance = 10 * dt
@@ -237,62 +237,20 @@ class TowerCrash(ShowBase):
     def update(self, task):
         dt = globalClock.getDt()
 
-        # if self.state == Game.PLAY and self.tower.tower_top <= 0:
-        #     if all(b.state in {Block.DROPPING, Block.REPOSITIONED} for b in self.tower.blocks):
-        #         print('gameover')
-
-        #         print('gameover')
-        #     self.timer = task.time + 0.3
-        #     self.state = Game.GAMEOVER
-
-        # if self.state == Game.GAMEOVER and task.time > self.timer:
-        #     self.start_screen.setup()
-        #     # self.tower.clean_up_all()
-        #     self.state = None
-
         if self.click:
             self.ball.move(*self.click)
             self.click = None
-
-        # control falling blocks
-        # if task.time >= self.next_check:
-        #     for block in self.tower.blocks:
-        #         if block.state == Block.INACTIVE:
-        #             break
-        #         if block.state == Block.ACTIVE:
-        #             # if abs(block.pos.z - block.getZ()) > 0.3:
-        #             if self.tower.calc_distance(block) > 0.5:  # ThinTower: 0.1 is good.
-        #                 # block.pos = block.getPos()
-        #                 block.state = Block.DROP
-        #             # else:
-        #             #     block.pos = block.getPos()
-        # #             # elif diff < 0.05 and block.state == Block.DROPPING:
-        # #             #     block.state = Block.REPOSITIONED
-        # #             # if block.state != Block.ACTIVE:
-        # #             #     block.pos = block.getPos()
-        #     self.next_check = task.time + CHECK_REPEAT
-
-
-        if task.time >= self.next_check:
-            for block in self.tower.blocks:
-                if block.state == Block.INACTIVE:
-                    break
-                if block.state in Block.MOVABLE:
-                    if (diff := abs(block.pos.z - block.getPos().z)) > 0.3:  # ThinTower: 0.1 is good.
-                        # block.pos = block.getPos()
-                        block.state = Block.DROP
-                    elif diff < 0.05 and block.state == Block.DROP:
-                        block.state = Block.REPOSITIONED
-                    if block.state != Block.ACTIVE:
-                        block.pos = block.getPos()
-            self.next_check = task.time + CHECK_REPEAT
 
         # control the blocks collided with a surface or a bottom.
         self.tower.floating(self.world.contactTest(self.scene.surface.node()))
         self.tower.sink(self.world.contactTest(self.scene.bottom.node()))
 
-        activated_cnt = self.tower.activate()
-        rotation_angle, descent_distance = self.control_camera(dt, activated_cnt)
+        activated_rows = 0
+        if task.time >= self.next_check:
+            activated_rows = self.tower.activate()
+            self.next_check = task.time + CHECK_REPEAT
+
+        rotation_angle, descent_distance = self.control_camera(dt, activated_rows)
 
         if self.ball.state == Ball.READY:
             self.ball.reposition(rotation_angle, descent_distance)
