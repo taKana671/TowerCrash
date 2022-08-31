@@ -21,6 +21,7 @@ class Block(Flag):
     ACTIVE = auto()
     INACTIVE = auto()
     INWATER = auto()
+    DELETE = auto()
     
 
 class Colors(int, Enum):
@@ -174,12 +175,14 @@ class Tower(NodePath):
             self.clean_up(block)
 
     def get_neighbors(self, block, color, blocks):
+        block.state = Block.DELETE
+        blocks.append(block)
         result = self.world.contactTest(block.node())
+        
         for name in set(con.getNode1().getName() for con in result.getContacts()):
             if name != self.foundation.name:
                 neighbor = self.blocks.find(name)
                 if neighbor not in blocks and neighbor.getColor() == color:
-                    blocks.append(neighbor)
                     self.get_neighbors(neighbor, color, blocks)
 
 

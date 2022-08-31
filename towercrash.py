@@ -82,9 +82,6 @@ class ColorBall(NodePath):
                 Func(self.tower.clean_up, block),
                 self.bubbles.get_sequence(self.getColor(), pos)
             ])
-
-            # para.append(Func(self.tower.crash, block, clicked_pos, v))
-            # para.append(Func(self.tower.clean_up, block))
         para.start()
 
     def move(self, clicked_pos, block):
@@ -92,9 +89,7 @@ class ColorBall(NodePath):
 
         blocks = []
         if self.getColor() == block.getColor():
-            blocks.append(block)
             self.tower.get_neighbors(block, block.getColor(), blocks)
-
         self.ball_number.detachNode()
 
         Sequence(
@@ -162,8 +157,8 @@ class TowerCrash(ShowBase):
 
     def create_tower(self):
         # self.tower = CylinderTower(24, self.scene.foundation, self.world)
-        self.tower = ThinTower(16, self.scene.foundation, self.world)
-        # self.tower = TripleTower(24, self.scene.foundation, self.world)
+        # self.tower = ThinTower(24, self.scene.foundation, self.world)
+        self.tower = TripleTower(24, self.scene.foundation, self.world)
         # self.tower = TwinTower(24, self.scene.foundation, self.world)
         self.tower.build()
 
