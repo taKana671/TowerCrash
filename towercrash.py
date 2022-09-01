@@ -142,7 +142,7 @@ class TowerCrash(ShowBase):
         self.wait_rotation = 0
         self.next_check = 0
         self.state = Game.PLAY
-        self.click = None
+        self.click = False
         # self.start_screen = StartScreen()
 
         # *******************************************
@@ -176,7 +176,7 @@ class TowerCrash(ShowBase):
         self.render.setShaderAuto()
         self.render.setLight(directional_light)
 
-    def mouse_click(self):
+    def control_mouse(self):
         if self.mouseWatcherNode.hasMouse():
             mouse_pos = self.mouseWatcherNode.getMouse()
             near_pos = Point3()
@@ -191,14 +191,18 @@ class TowerCrash(ShowBase):
                 clicked_pos = result.getHitPos()
 
                 if (block := self.tower.blocks.find(node_name)).state == Block.ACTIVE:
-                    self.click = Click(clicked_pos, block)
+                    return clicked_pos, block
 
                 print('node_name', node_name)
                 print('collision_pt', clicked_pos)
             else:
                 self.mouse_x = 0
                 self.wait_rotation = globalClock.getFrameCount() + WAIT_COUNT
+        return None
 
+    def mouse_click(self):
+        self.click = True
+    
     def mouse_release(self):
         self.wait_rotation = 0
 
@@ -233,8 +237,9 @@ class TowerCrash(ShowBase):
         dt = globalClock.getDt()
 
         if self.click:
-            self.ball.move(*self.click)
-            self.click = None
+            if clicked := self.control_mouse():
+                self.ball.move(*clicked)
+            self.click = False
 
         # control the blocks collided with a surface or a bottom.
         self.tower.floating(self.world.contactTest(self.scene.surface.node()))

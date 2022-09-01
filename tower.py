@@ -178,7 +178,7 @@ class Tower(NodePath):
         block.state = Block.DELETE
         blocks.append(block)
         result = self.world.contactTest(block.node())
-        
+
         for name in set(con.getNode1().getName() for con in result.getContacts()):
             if name != self.foundation.name:
                 neighbor = self.blocks.find(name)
