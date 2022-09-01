@@ -41,13 +41,16 @@ class ColorBall(NodePath):
 
     def __init__(self, tower, pos):
         super().__init__(PandaNode('ball'))
-        ball = base.loader.loadModel(PATH_SPHERE)
-        ball.reparentTo(self)
-        self.setScale(0.2)
+        self.reparentTo(base.render)
         self.tower = tower
         self.state = None
         self.bubbles = Bubbles()
         self.cnt = 0
+
+        self.special = SpecialBall(self.tower, self.bubbles)
+        self.normal = NormalBall(self.tower, self.bubbles)
+        self.ball = self.normal
+
         self.ball_number = OnscreenText(
             style=Plain,
             pos=(-0.02, -0.98),
@@ -56,26 +59,65 @@ class ColorBall(NodePath):
             mayChange=True
         )
         self.pos = pos
-        self.setup(self.pos.z)
+        self.setup(Colors.select(), self.pos.z)
 
-    def setup(self, camera_z):
+    def setup(self, color, camera_z):
+        if color:
+            self.ball = self.normal
+            self.ball.setColor(color)
+        else:
+            self.ball = self.special
+
         self.pos.z = camera_z - 1.5
-        self.setPos(self.pos)
-        self.setColor(Colors.select())
-        self.reparentTo(base.render)
+        self.ball.setPos(self.pos)
+        self.ball.reparentTo(self)
         self.state = Ball.READY
-
         # show the number of throwing a ball.
         self.cnt += 1
         self.ball_number.reparentTo(base.aspect2d)
         self.ball_number.setText(str(self.cnt))
 
     def _delete(self):
-        self.detachNode()
+        self.ball.detachNode()
         self.state = Ball.DELETED
 
-    def _hit(self, clicked_pos, blocks):
+    def move(self, clicked_pos, block):
+        self.state = Ball.MOVE
+        self.ball_number.detachNode()
+
+        Sequence(
+            self.ball.posInterval(0.5, clicked_pos),
+            Func(self._delete),
+            Func(self.ball.hit, clicked_pos, block)
+        ).start()
+
+    def reposition(self, rotation_angle=None, vertical_distance=None):
+        if rotation_angle:
+            self.pos = self.tower.rotate(self.ball, rotation_angle)
+            self.ball.setPos(self.pos)
+            self.ball.setH(self.ball.getH() + rotation_angle)
+        if vertical_distance:
+            self.pos.z -= vertical_distance
+            self.ball.setZ(self.pos.z)
+
+
+class NormalBall(NodePath):
+
+    def __init__(self, tower, bubbles):
+        super().__init__(PandaNode('normalBall'))
+        ball = base.loader.loadModel(PATH_SPHERE)
+        ball.reparentTo(self)
+        self.setScale(0.2)
+        self.tower = tower
+        self.bubbles = bubbles
+
+    def hit(self, clicked_pos, block):
+        blocks = []
+        if self.getColor() == block.getColor():
+            self.tower.get_neighbors(block, block.getColor(), blocks)
+
         para = Parallel(self.bubbles.get_sequence(self.getColor(), clicked_pos))
+
         for block in blocks:
             pos = block.getPos()
             para.extend([
@@ -84,27 +126,32 @@ class ColorBall(NodePath):
             ])
         para.start()
 
-    def move(self, clicked_pos, block):
-        self.state = Ball.MOVE
 
-        blocks = []
-        if self.getColor() == block.getColor():
-            self.tower.get_neighbors(block, block.getColor(), blocks)
-        self.ball_number.detachNode()
+class SpecialBall(NodePath):
 
-        Sequence(
-            self.posInterval(0.5, clicked_pos),
-            Func(self._delete),
-            Func(self._hit, clicked_pos, blocks)
+    def __init__(self, tower, bubbles):
+        super().__init__(PandaNode('specialBall'))
+        ball = base.loader.loadModel(PATH_SPHERE)
+        ball.setTexture(
+            base.loader.loadTexture('textures/multi.jpg'), 1)
+        ball.reparentTo(self)
+        self.setScale(0.2)
+        self.setHpr(95, 0, 30)
+        self.tower = tower
+        self.bubbles = bubbles
+
+    def _hit(self, color):
+        for block in self.tower.get_same_colors(color):
+            pos = block.getPos()
+            yield Func(self.tower.clean_up, block)
+            yield self.bubbles.get_sequence(color, pos)
+
+    def hit(self, clicked_pos, block):
+        color = block.getColor()
+        Parallel(
+            self.bubbles.get_sequence(Colors.select(), clicked_pos),
+            *[f for f in self._hit(color)]
         ).start()
-
-    def reposition(self, rotation_angle=None, vertical_distance=None):
-        if rotation_angle:
-            self.pos = self.tower.rotate(self, rotation_angle)
-            self.setPos(self.pos)
-        if vertical_distance:
-            self.pos.z -= vertical_distance
-            self.setZ(self.pos.z)
 
 
 class TowerCrash(ShowBase):
@@ -137,7 +184,6 @@ class TowerCrash(ShowBase):
 
         self.ball = ColorBall(
             self.tower, Point3(5.5, -21, self.camera.getZ()))
-        # self.ball.setup(self.camera.getZ())
 
         self.wait_rotation = 0
         self.next_check = 0
@@ -156,9 +202,9 @@ class TowerCrash(ShowBase):
         self.taskMgr.add(self.update, 'update')
 
     def create_tower(self):
-        # self.tower = CylinderTower(24, self.scene.foundation, self.world)
+        self.tower = CylinderTower(24, self.scene.foundation, self.world)
         # self.tower = ThinTower(24, self.scene.foundation, self.world)
-        self.tower = TripleTower(24, self.scene.foundation, self.world)
+        # self.tower = TripleTower(24, self.scene.foundation, self.world)
         # self.tower = TwinTower(24, self.scene.foundation, self.world)
         self.tower.build()
 
@@ -202,7 +248,7 @@ class TowerCrash(ShowBase):
 
     def mouse_click(self):
         self.click = True
-    
+
     def mouse_release(self):
         self.wait_rotation = 0
 
@@ -255,7 +301,7 @@ class TowerCrash(ShowBase):
         if self.ball.state == Ball.READY:
             self.ball.reposition(rotation_angle, descent_distance)
         if self.ball.state == Ball.DELETED:
-            self.ball.setup(self.camera.getZ())
+            self.ball.setup(Colors.select(6), self.camera.getZ())
 
         self.world.doPhysics(dt)
         return task.cont
@@ -280,11 +326,6 @@ class StartScreen(NodePath):
     def setup(self):
         self.setPos(Point3(0, -23, 10))
         self.reparentTo(base.render)
-
-
-
-
-
 
 
 if __name__ == '__main__':

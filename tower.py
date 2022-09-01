@@ -22,7 +22,7 @@ class Block(Flag):
     INACTIVE = auto()
     INWATER = auto()
     DELETE = auto()
-    
+
 
 class Colors(int, Enum):
 
@@ -32,7 +32,8 @@ class Colors(int, Enum):
     GREEN = (3, LColor(0, 0.5, 0, 1))
     VIOLET = (4, LColor(0.54, 0.16, 0.88, 1))
     MAGENTA = (5, LColor(1, 0, 1, 1))
-    GRAY = (6, LColor(0.25, 0.25, 0.25, 1))
+    MULTI = (6, None)
+    GRAY = (7, LColor(0.25, 0.25, 0.25, 1))
 
     def __new__(cls, id_, rgba):
         obj = int.__new__(cls, id_)
@@ -119,6 +120,7 @@ class Tower(NodePath):
 
         if self.inactive_top >= 0:
             if activate_rows := self.tower_top - tower_top_now:
+                print('activate_rows', activate_rows)
                 for _ in range(activate_rows):
                     for block in self.blocks(self.inactive_top):
                         block.state = Block.ACTIVE
@@ -126,7 +128,8 @@ class Tower(NodePath):
                         block.setColor(Colors.select())
                         block.node().deactivation_enabled = False
                         block.node().setMass(1)
-                self.inactive_top -= activate_rows
+                    self.inactive_top -= activate_rows
+                print('inactive_top', self.inactive_top)
         self.tower_top = tower_top_now
 
         return activate_rows
@@ -184,6 +187,12 @@ class Tower(NodePath):
                 neighbor = self.blocks.find(name)
                 if neighbor not in blocks and neighbor.getColor() == color:
                     self.get_neighbors(neighbor, color, blocks)
+
+    def get_same_colors(self, color):
+        for block in self.blocks:
+            if block.state == Block.ACTIVE and block.getColor() == color:
+                block.state = Block.DELETE
+                yield block
 
 
 class CylinderTower(Tower):
