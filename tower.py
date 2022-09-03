@@ -9,7 +9,6 @@ from direct.interval.IntervalGlobal import Sequence, Parallel, Func, Wait
 from panda3d.core import PandaNode, NodePath, TransformState
 from panda3d.core import Quat, Vec3, LColor, BitMask32, Point3
 
-from bubble import Bubbles
 
 PATH_CYLINDER = "models/cylinder/cylinder"
 PATH_CUBE = 'models/cube/cube'
@@ -114,13 +113,11 @@ class Tower(NodePath):
         activate_rows = 0
         top_block = max(
             (b for b in self.blocks if b.state == Block.ACTIVE),
-            key=lambda x: x.getZ()
-        )
+            key=lambda x: x.getZ())
         tower_top_now = int(top_block.getZ() / self.block_h) - 1
 
         if self.inactive_top >= 0:
             if activate_rows := self.tower_top - tower_top_now:
-                print('activate_rows', activate_rows)
                 for _ in range(activate_rows):
                     for block in self.blocks(self.inactive_top):
                         block.state = Block.ACTIVE
@@ -128,30 +125,9 @@ class Tower(NodePath):
                         block.setColor(Colors.select())
                         block.node().deactivation_enabled = False
                         block.node().setMass(1)
-                    self.inactive_top -= activate_rows
-                print('inactive_top', self.inactive_top)
+                    self.inactive_top -= 1
         self.tower_top = tower_top_now
-
         return activate_rows
-
-        # activate_rows = 0
-
-        # if self.inactive_top >= 0:
-        #     top_block = max((b for b in self.blocks if b.state == Block.ACTIVE), key=lambda x: x.getZ())
-        #     tower_top_now = int(top_block.getZ() / self.block_h) - 1
-
-        #     if activate_rows := self.tower_top - tower_top_now:
-        #         for _ in range(activate_rows):
-        #             for block in self.blocks(self.inactive_top):
-        #                 block.state = Block.ACTIVE
-        #                 block.clearColor()
-        #                 block.setColor(Colors.select())
-        #                 block.node().deactivation_enabled = False
-        #                 block.node().setMass(1)
-        #             # if self.inactive_top >= 0:
-        #             self.inactive_top -= 1
-        #         self.tower_top -= activate_rows
-        # return activate_rows
 
     def rotate(self, obj, rotation_angle):
         q = Quat()
@@ -193,6 +169,10 @@ class Tower(NodePath):
             if block.state == Block.ACTIVE and block.getColor() == color:
                 block.state = Block.DELETE
                 yield block
+
+    def remove_blocks(self):
+        for block in self.blocks:
+            self.clean_up(block)
 
 
 class CylinderTower(Tower):
@@ -392,7 +372,6 @@ class Cylinder(NodePath):
         self.setColor(color)
         self.setPos(pos)
         self.state = state
-        self.pos = pos
 
 
 class Rectangle(NodePath):
@@ -412,7 +391,6 @@ class Rectangle(NodePath):
         self.setColor(color)
         self.setPos(pos)
         self.state = state
-        self.pos = pos
 
 
 class TriangularPrism(NodePath):
@@ -437,4 +415,3 @@ class TriangularPrism(NodePath):
         prism.setScale(prism_scale)
         prism.reparentTo(self)
         self.state = state
-        self.pos = pos
