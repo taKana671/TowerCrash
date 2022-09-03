@@ -5,7 +5,7 @@ from enum import Enum, Flag, auto
 
 from panda3d.bullet import BulletCylinderShape, BulletBoxShape, BulletConvexHullShape
 from panda3d.bullet import BulletRigidBodyNode
-from direct.interval.IntervalGlobal import Sequence, Func
+from direct.interval.IntervalGlobal import Sequence, Parallel, Func, Wait
 from panda3d.core import PandaNode, NodePath, TransformState
 from panda3d.core import Quat, Vec3, LColor, BitMask32, Point3
 
@@ -20,13 +20,7 @@ class Block(Flag):
     ACTIVE = auto()
     INACTIVE = auto()
     INWATER = auto()
-    DROPPING = auto()
-    REPOSITIONED = auto()
-
-    MOVABLE = ACTIVE | DROPPING | REPOSITIONED
-    ROTATABLE = ACTIVE | INACTIVE | REPOSITIONED
-    CLICKABLE = ACTIVE | REPOSITIONED
-    COLLAPSED = DROPPING | INWATER | REPOSITIONED
+    DELETE = auto()
 
 
 class Colors(int, Enum):
@@ -37,7 +31,8 @@ class Colors(int, Enum):
     GREEN = (3, LColor(0, 0.5, 0, 1))
     VIOLET = (4, LColor(0.54, 0.16, 0.88, 1))
     MAGENTA = (5, LColor(1, 0, 1, 1))
-    GRAY = (6, LColor(0.25, 0.25, 0.25, 1))
+    MULTI = (6, None)
+    GRAY = (7, LColor(0.25, 0.25, 0.25, 1))
 
     def __new__(cls, id_, rgba):
         obj = int.__new__(cls, id_)
@@ -96,7 +91,7 @@ class Blocks:
 
 
 class Tower(NodePath):
-    def __init__(self, stories, foundation, world, blocks):
+    def __init__(self, world, stories, foundation, blocks):
         super().__init__(PandaNode('tower'))
         self.reparentTo(base.render)
         self.foundation = foundation
@@ -114,84 +109,76 @@ class Tower(NodePath):
         else:
             return Colors.select(), Block.ACTIVE
 
-    def calc_distance(self, block):
-        now_pos = block.getPos()
-        dx = block.pos.x - now_pos.x
-        dy = block.pos.y - now_pos.y
-        dz = block.pos.z - now_pos.z
-
-        return (dx ** 2 + dy ** 2 * dz ** 2) ** 0.5
-
-    def is_collapsed(self, block, threshold=1.5):
-        if abs(block.pos.getZ() - block.getZ()) > threshold:
-            return True
-        return False
-
     def activate(self):
-        cnt = 0
+        activate_rows = 0
+        top_block = max(
+            (b for b in self.blocks if b.state == Block.ACTIVE),
+            key=lambda x: x.getZ())
+        tower_top_now = int(top_block.getZ() / self.block_h) - 1
 
-        for i in range(self.tower_top, -1, -1):
-            if all(block.state in Block.COLLAPSED for block in self.blocks(i)):
-                for block in self.blocks(self.inactive_top):
-                    block.state = Block.ACTIVE
-                    block.clearColor()
-                    block.setColor(Colors.select())
-                    block.node().setMass(1)
-                if self.inactive_top >= 0:
+        if self.inactive_top >= 0:
+            if activate_rows := self.tower_top - tower_top_now:
+                for _ in range(activate_rows):
+                    for block in self.blocks(self.inactive_top):
+                        block.state = Block.ACTIVE
+                        block.clearColor()
+                        block.setColor(Colors.select())
+                        block.node().deactivation_enabled = False
+                        block.node().setMass(1)
                     self.inactive_top -= 1
-                    cnt += 1
-                self.tower_top -= 1
-                continue
-            break
-        return cnt
+        self.tower_top = tower_top_now
+        return activate_rows
 
-        # if self.inactive_top >= 0:
-        #     for i in range(self.tower_top, -1, -1):
-        #         if all(block.state in Block.COLLAPSED for block in self.blocks(i)):
-        #             for block in self.blocks(self.inactive_top):
-        #                 block.state = Block.ACTIVE
-        #                 block.clearColor()
-        #                 block.setColor(Colors.select())
-        #                 block.node().setMass(1)
-        #             self.inactive_top -= 1
-        #             self.tower_top -= 1
-        #             cnt += 1
-        #             continue
-        #         break
-        # return cnt
-
-    def crash(self, block, clicked_pos):
-        block.node().setActive(True)
-        if random.randint(1, 5) == 1:
-            impulse = Vec3.forward() * random.randint(1, 5)
-            block.node().applyImpulse(impulse, clicked_pos)
-        else:
-            block.node().applyCentralImpulse(Vec3.forward() * 20)
-
-    def rotate_around(self, angle):
-        # Tried to use <nodepath>.setH() like self.foundation to rotate blocks,
-        # but too slow.
-        self.foundation.setH(self.foundation.getH() + angle)
+    def rotate(self, obj, rotation_angle):
         q = Quat()
-        q.setFromAxisAngle(angle, self.axis.normalized())
-
-        # for block in self.blocks:
-        for block in (b for i in range(self.blocks.rows) for b in self.blocks(i)):
-            if block.state in Block.ROTATABLE:
-                r = q.xform(block.getPos() - self.center)
-                block.setPos(self.center + r)
-                block.setH(block.getH() + angle)
+        q.setFromAxisAngle(rotation_angle, self.axis.normalized())
+        r = q.xform(obj.getPos() - self.center)
+        rotated_pos = self.center + r
+        return rotated_pos
 
     def clean_up(self, block):
         self.blocks[block.node().getName()] = None
         self.world.remove(block.node())
         block.removeNode()
 
+    def floating(self, result):
+        for name in set(con.getNode0().getName() for con in result.getContacts()):
+            block = self.blocks.find(name)
+            if block.state != Block.INWATER:
+                block.state = Block.INWATER
+                block.node().deactivation_enabled = True
+
+    def sink(self, result):
+        for name in set(con.getNode0().getName() for con in result.getContacts()):
+            block = self.blocks.find(name)
+            self.clean_up(block)
+
+    def get_neighbors(self, block, color, blocks):
+        block.state = Block.DELETE
+        blocks.append(block)
+        result = self.world.contactTest(block.node())
+
+        for name in set(con.getNode1().getName() for con in result.getContacts()):
+            if name != self.foundation.name:
+                neighbor = self.blocks.find(name)
+                if neighbor not in blocks and neighbor.getColor() == color:
+                    self.get_neighbors(neighbor, color, blocks)
+
+    def get_same_colors(self, color):
+        for block in self.blocks:
+            if block.state == Block.ACTIVE and block.getColor() == color:
+                block.state = Block.DELETE
+                yield block
+
+    def remove_blocks(self):
+        for block in self.blocks:
+            self.clean_up(block)
+
 
 class CylinderTower(Tower):
 
     def __init__(self, stories, foundation, world):
-        super().__init__(stories, foundation, world, Blocks(18, stories))
+        super().__init__(world, stories, foundation, Blocks(18, stories))
         self.block_h = 2.45
         self.radius = 4
         self.pts2d_even = [(x, y) for x, y in self.block_position(0, 360, 20)]
@@ -223,9 +210,11 @@ class CylinderTower(Tower):
                 cylinder = Cylinder(
                     self, pt + self.center, str(i * self.blocks.cols + j), color, state)
                 self.world.attachRigidBody(cylinder.node())
+                cylinder.node().deactivation_enabled = False
 
                 if state == state.INACTIVE:
                     cylinder.node().setMass(0)
+                    cylinder.node().deactivation_enabled = True
 
                 self.blocks[i, j] = cylinder
 
@@ -233,7 +222,7 @@ class CylinderTower(Tower):
 class TwinTower(Tower):
 
     def __init__(self, stories, foundation, world):
-        super().__init__(stories, foundation, world, Blocks(7, stories))
+        super().__init__(world, stories, foundation, Blocks(7, stories))
         self.block_h = 2.45
         self.l_center = Point3(-5, 12, 1.0)
         self.r_center = Point3(1, 12, 1.0)
@@ -283,9 +272,11 @@ class TwinTower(Tower):
                 cylinder = Cylinder(
                     self, pt + center, str(i * self.blocks.cols + j), color, state, expand)
                 self.world.attachRigidBody(cylinder.node())
+                cylinder.node().deactivation_enabled = False
 
                 if state == state.INACTIVE:
                     cylinder.node().setMass(0)
+                    cylinder.node().deactivation_enabled = True
 
                 self.blocks[i, j] = cylinder
 
@@ -293,7 +284,7 @@ class TwinTower(Tower):
 class ThinTower(Tower):
 
     def __init__(self, stories, foundation, world):
-        super().__init__(stories, foundation, world, Blocks(7, stories))
+        super().__init__(world, stories, foundation, Blocks(7, stories))
         self.block_h = 2.3
         self.even_row = [-0.5, -1.5, -2.5, 0.5, 1.5, 2.5]
         self.odd_row = [0, -1, -2, -2.75, 1, 2, 2.75]
@@ -310,17 +301,18 @@ class ThinTower(Tower):
                 rect = Rectangle(
                     self, pos + self.center, str(i * self.blocks.cols + j), color, state, shrink)
                 self.world.attachRigidBody(rect.node())
+                rect.node().deactivation_enabled = False
 
                 if state == state.INACTIVE:
                     rect.node().setMass(0)
-
+                    rect.node().deactivation_enabled = True
                 self.blocks[i, j] = rect
 
 
 class TripleTower(Tower):
 
     def __init__(self, stories, foundation, world):
-        super().__init__(stories, foundation, world, Blocks(12, stories))
+        super().__init__(world, stories, foundation, Blocks(12, stories))
         self.block_h = 2.2  # 2.23
         self.centers = [Point3(-2, 8, 1.0), Point3(1.5, 13, 1.0), Point3(-5, 14, 1.0)]
 
@@ -352,9 +344,11 @@ class TripleTower(Tower):
                 triangle = TriangularPrism(
                     self, pt + center, str(i * self.blocks.cols + j), color, state, expand, reverse)
                 self.world.attachRigidBody(triangle.node())
+                triangle.node().deactivation_enabled = False
 
                 if state == state.INACTIVE:
                     triangle.node().setMass(0)
+                    triangle.node().deactivation_enabled = True
 
                 self.blocks[i, j] = triangle
 
@@ -378,7 +372,6 @@ class Cylinder(NodePath):
         self.setColor(color)
         self.setPos(pos)
         self.state = state
-        self.pos = pos
 
 
 class Rectangle(NodePath):
@@ -398,7 +391,6 @@ class Rectangle(NodePath):
         self.setColor(color)
         self.setPos(pos)
         self.state = state
-        self.pos = pos
 
 
 class TriangularPrism(NodePath):
@@ -423,4 +415,3 @@ class TriangularPrism(NodePath):
         prism.setScale(prism_scale)
         prism.reparentTo(self)
         self.state = state
-        self.pos = pos

@@ -1,13 +1,14 @@
+from collections import namedtuple
 from enum import Enum, auto
 
 from direct.gui.DirectGui import OnscreenText, Plain
-from direct.interval.IntervalGlobal import Sequence, Parallel, Func
+from direct.interval.IntervalGlobal import Sequence, Parallel, Func, Wait
 from direct.showbase.ShowBaseGlobal import globalClock
 from direct.showbase.ShowBase import ShowBase
 from panda3d.bullet import BulletSphereShape
 from panda3d.bullet import BulletWorld, BulletDebugNode
-from panda3d.core import PandaNode, NodePath, TextNode
-from panda3d.core import Vec3, LColor, BitMask32, Point3
+from panda3d.core import PandaNode, NodePath, TextNode, TransparencyAttrib
+from panda3d.core import Vec3, LColor, BitMask32, Point3, Quat
 from panda3d.core import AmbientLight, DirectionalLight
 
 from bubble import Bubbles
@@ -17,6 +18,11 @@ from tower import CylinderTower, ThinTower, TripleTower, TwinTower, Colors, Bloc
 
 PATH_SPHERE = "models/sphere/sphere"
 CHECK_REPEAT = 0.2
+WAIT_COUNT = 5
+RESTART = 1
+
+
+Click = namedtuple('Click', 'pos block')
 
 
 class Ball(Enum):
@@ -26,17 +32,26 @@ class Ball(Enum):
     MOVE = auto()
 
 
+class Game(Enum):
+
+    PLAY = auto()
+    GAMEOVER = auto()
+
+
 class ColorBall(NodePath):
 
-    def __init__(self, tower):
+    def __init__(self, tower, pos):
         super().__init__(PandaNode('ball'))
-        ball = base.loader.loadModel(PATH_SPHERE)
-        ball.reparentTo(self)
-        self.setScale(0.2)
+        self.reparentTo(base.render)
         self.tower = tower
         self.state = None
         self.bubbles = Bubbles()
         self.cnt = 0
+
+        self.special = SpecialBall(self.tower, self.bubbles)
+        self.normal = NormalBall(self.tower, self.bubbles)
+        self.ball = self.normal
+
         self.ball_number = OnscreenText(
             style=Plain,
             pos=(-0.02, -0.98),
@@ -44,35 +59,101 @@ class ColorBall(NodePath):
             scale=0.1,
             mayChange=True
         )
+        self.pos = pos
+        self.hpr = Vec3(95, 0, 30)
+        self.setup(Colors.select(), self.pos.z)
 
-    def setup(self, camera_z):
-        pos = Point3(5.5, -21, camera_z - 1.5)
-        self.setPos(pos)
-        self.setColor(Colors.select())
-        self.reparentTo(base.render)
+    def setup(self, color, camera_z):
+        if color:
+            self.ball = self.normal
+            self.ball.setColor(color)
+        else:
+            self.ball = self.special
+
+        self.pos.z = camera_z - 1.5
+        self.ball.setPos(self.pos)
+        self.ball.setHpr(self.hpr)
+        self.ball.reparentTo(self)
         self.state = Ball.READY
-
         # show the number of throwing a ball.
         self.cnt += 1
         self.ball_number.reparentTo(base.aspect2d)
         self.ball_number.setText(str(self.cnt))
 
     def _delete(self):
-        self.detachNode()
+        self.ball.detachNode()
         self.state = Ball.DELETED
 
-    def _hit(self, clicked_pos, block):
-        para = Parallel(self.bubbles.get_sequence(self.getColor(), clicked_pos))
+    def move(self, clicked_pos, block):
+        self.state = Ball.MOVE
+        self.ball_number.detachNode()
+
+        Sequence(
+            self.ball.posInterval(0.5, clicked_pos),
+            Func(self._delete),
+            Func(self.ball.hit, clicked_pos, block)
+        ).start()
+
+    def reposition(self, rotation_angle=None, vertical_distance=None):
+        if rotation_angle:
+            self.pos = self.tower.rotate(self.ball, rotation_angle)
+            self.ball.setPos(self.pos)
+            self.hpr.x = self.ball.getH() + rotation_angle
+            self.ball.setHpr(self.hpr)
+        if vertical_distance:
+            self.pos.z -= vertical_distance
+            self.ball.setZ(self.pos.z)
+
+
+class NormalBall(NodePath):  
+
+    def __init__(self, tower, bubbles):
+        super().__init__(PandaNode('normalBall'))
+        ball = base.loader.loadModel(PATH_SPHERE)
+        ball.reparentTo(self)
+        self.setScale(0.2)
+        self.tower = tower
+        self.bubbles = bubbles
+
+    def hit(self, clicked_pos, block):
+        blocks = []
         if self.getColor() == block.getColor():
-            para.append(Func(self.tower.crash, block, clicked_pos))
+            self.tower.get_neighbors(block, block.getColor(), blocks)
+
+        para = Parallel(self.bubbles.get_sequence(self.getColor(), clicked_pos))
+
+        for block in blocks:
+            pos = block.getPos()
+            para.extend([
+                Func(self.tower.clean_up, block),
+                self.bubbles.get_sequence(self.getColor(), pos)
+            ])
         para.start()
 
-    def move(self, clicked_pos, block):
-        self.ball_number.detachNode()
-        Sequence(
-            self.posInterval(0.5, clicked_pos),
-            Func(self._delete),
-            Func(self._hit, clicked_pos, block)
+
+class SpecialBall(NodePath):
+
+    def __init__(self, tower, bubbles):
+        super().__init__(PandaNode('specialBall'))
+        ball = base.loader.loadModel(PATH_SPHERE)
+        ball.setTexture(
+            base.loader.loadTexture('textures/multi.jpg'), 1)
+        ball.reparentTo(self)
+        self.setScale(0.2)
+        self.tower = tower
+        self.bubbles = bubbles
+
+    def _hit(self, color):
+        for block in self.tower.get_same_colors(color):
+            pos = block.getPos()
+            yield Func(self.tower.clean_up, block)
+            yield self.bubbles.get_sequence(color, pos)
+
+    def hit(self, clicked_pos, block):
+        color = block.getColor()
+        Parallel(
+            self.bubbles.get_sequence(Colors.select(), clicked_pos),
+            *[f for f in self._hit(color)]
         ).start()
 
 
@@ -91,11 +172,11 @@ class TowerCrash(ShowBase):
         self.camera_lowest_z = 2.5
 
         self.setup_lights()
-        self.physical_world = BulletWorld()
-        self.physical_world.setGravity(Vec3(0, 0, -9.81))
+        self.world = BulletWorld()
+        self.world.setGravity(Vec3(0, 0, -9.81))
 
         self.scene = Scene()
-        self.scene.setup(self.physical_world)
+        self.scene.setup(self.world)
         self.create_tower()
 
         camera_z = (self.tower.inactive_top + 1) * 2.5
@@ -104,29 +185,31 @@ class TowerCrash(ShowBase):
         self.camera.lookAt(Point3(-2, 12, look_z))
         self.camera_move_distance = 0
 
-        self.ball = ColorBall(self.tower)
-        self.ball.setup(self.camera.getZ())
+        self.ball = ColorBall(
+            self.tower, Point3(5.5, -21, self.camera.getZ()))
 
-        self.dragging_duration = 0
-        self.max_duration = 5
-
+        self.wait_rotation = 0
         self.next_check = 0
+        self.restart = 0
+        self.state = Game.PLAY
+        self.click = False
+        # self.start_screen = StartScreen()
 
         # *******************************************
         # collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
-        # self.physical_world.setDebugNode(collide_debug.node())
+        # self.world.setDebugNode(collide_debug.node())
         # collide_debug.show()
         # *******************************************
 
-        self.accept('mouse1', self.click)
-        self.accept('mouse1-up', self.release)
+        self.accept('mouse1', self.mouse_click)
+        self.accept('mouse1-up', self.mouse_release)
         self.taskMgr.add(self.update, 'update')
 
     def create_tower(self):
-        self.tower = CylinderTower(24, self.scene.foundation, self.physical_world)
-        # self.tower = ThinTower(24, self.scene.foundation, self.physical_world)
-        # self.tower = TripleTower(24, self.scene.foundation, self.physical_world)
-        # self.tower = TwinTower(24, self.scene.foundation, self.physical_world)
+        # self.tower = CylinderTower(24, self.scene.foundation, self.world)
+        # self.tower = ThinTower(16, self.scene.foundation, self.world)
+        # self.tower = TripleTower(24, self.scene.foundation, self.world)
+        self.tower = TwinTower(24, self.scene.foundation, self.world)
         self.tower.build()
 
     def setup_lights(self):
@@ -143,9 +226,7 @@ class TowerCrash(ShowBase):
         self.render.setShaderAuto()
         self.render.setLight(directional_light)
 
-    def click(self):
-        self.dragging_duration = 0
-
+    def control_mouse(self):
         if self.mouseWatcherNode.hasMouse():
             mouse_pos = self.mouseWatcherNode.getMouse()
             near_pos = Point3()
@@ -153,87 +234,110 @@ class TowerCrash(ShowBase):
             self.camLens.extrude(mouse_pos, near_pos, far_pos)
             from_pos = self.render.getRelativePoint(self.camera, near_pos)
             to_pos = self.render.getRelativePoint(self.camera, far_pos)
-            result = self.physical_world.rayTestClosest(from_pos, to_pos, BitMask32.bit(1))
+            result = self.world.rayTestClosest(from_pos, to_pos, BitMask32.bit(1))
 
             if result.hasHit():
                 node_name = result.getNode().getName()
                 clicked_pos = result.getHitPos()
 
-                if (block := self.tower.blocks.find(node_name)).state in Block.CLICKABLE:
-                    self.ball.state = Ball.MOVE
-                    print(self.camera.getH())
-                    self.ball.move(clicked_pos, block)
+                if (block := self.tower.blocks.find(node_name)).state == Block.ACTIVE:
+                    return clicked_pos, block
 
                 print('node_name', node_name)
                 print('collision_pt', clicked_pos)
             else:
                 self.mouse_x = 0
-                self.dragging_duration += 1
+                self.wait_rotation = globalClock.getFrameCount() + WAIT_COUNT
+        return None
 
-    def release(self):
-        self.dragging_duration = 0
+    def mouse_click(self):
+        self.click = True
+
+    def mouse_release(self):
+        self.wait_rotation = 0
+
+    def control_camera(self, dt, activated_rows):
+        # control the rotation of camera.
+        angle = 0
+        if self.wait_rotation:
+            mouse_x = self.mouseWatcherNode.getMouseX()
+            if globalClock.getFrameCount() >= self.wait_rotation:
+                if (delta := mouse_x - self.mouse_x) < 0:
+                    angle += 90
+                elif delta > 0:
+                    angle -= 90
+                angle *= dt
+                rotated_pos = self.tower.rotate(self.camera, angle)
+                self.camera.setPos(rotated_pos)
+                self.camera.setH(self.camera.getH() + angle)
+            self.mouse_x = mouse_x
+
+        # control the vertical position of camera.
+        distance = 0
+        self.camera_move_distance += activated_rows * self.tower.block_h
+        if self.camera_move_distance > 0:
+            if self.camera.getZ() > self.camera_lowest_z:
+                distance = 10 * dt
+                self.camera.setZ(self.camera.getZ() - distance)
+                self.camera_move_distance -= distance
+
+        return angle, distance
+
+    def game_over(self):
+        pass
 
     def update(self, task):
         dt = globalClock.getDt()
 
-        # control falling blocks
-        if task.time >= self.next_check:
-            for block in self.tower.blocks:
-                if block.state == Block.INACTIVE:
-                    break
-                if block.state in Block.MOVABLE:
-                    if (diff := abs(block.pos.z - block.getPos().z)) > 0.3:  # ThinTower: 0.1 is good.
-                        block.pos = block.getPos()
-                        block.state = Block.DROPPING
-                    elif diff < 0.05 and block.state == Block.DROPPING:
-                        block.state = Block.REPOSITIONED
-                    elif block.state != Block.ACTIVE:
-                        block.pos = block.getPos()
-            self.next_check = task.time + CHECK_REPEAT
+        if self.state == Game.PLAY and self.tower.tower_top == 0:
+            self.state = Game.GAMEOVER
+            self.game_over()
 
-        for block in self.tower.blocks:
-            if block.state == Block.INACTIVE:
-                break
-            if block.state in Block.MOVABLE:
-                result = self.physical_world.contactTest(block.node())
-                for contact in result.getContacts():
-                    if (name := contact.getNode1().getName()) == self.scene.surface.name:
-                        block.state = Block.INWATER
-                    elif name == self.scene.bottom.name:
-                        self.tower.clean_up(block)
+        if self.state == Game.PLAY:
+            if self.click:
+                if clicked := self.control_mouse():
+                    self.ball.move(*clicked)
+                self.click = False
 
-        # control rotation of the tower
-        angle = 0
-        if self.dragging_duration:
-            mouse_x = self.mouseWatcherNode.getMouse().getX()
-            if (delta := mouse_x - self.mouse_x) < 0:
-                angle -= 90
-            elif delta > 0:
-                angle += 90
-            self.mouse_x = mouse_x
-            self.dragging_duration += 1
+            # control the blocks collided with a surface or a bottom.
+            self.tower.floating(self.world.contactTest(self.scene.surface.node()))
+            self.tower.sink(self.world.contactTest(self.scene.bottom.node()))
 
-            if self.dragging_duration >= self.max_duration and angle != 0:
-                self.tower.rotate_around(angle * dt)
+            activated_rows = 0
+            if task.time >= self.next_check:
+                activated_rows = self.tower.activate()
+                self.next_check = task.time + CHECK_REPEAT
 
-        # setup next ball
-        if self.ball.state == Ball.DELETED:
-            self.ball.setup(self.camera.getZ())
+            rotation_angle, descent_distance = self.control_camera(dt, activated_rows)
 
-        # control camera position
-        # distance = 0
-        self.camera_move_distance += self.tower.activate() * self.tower.block_h
-        if self.camera_move_distance > 0:
-            if self.camera.getZ() > self.camera_lowest_z:
-                distance = 10 * dt
-                self.camera_move_distance -= distance
-                self.camera.setZ(self.camera.getZ() - distance)
+            if self.ball.state == Ball.READY:
+                self.ball.reposition(rotation_angle, descent_distance)
+            if self.ball.state == Ball.DELETED:
+                self.ball.setup(Colors.select(6), self.camera.getZ())
 
-                if self.ball.state == Ball.READY:
-                    self.ball.setZ(self.ball.getZ() - distance)
-
-        self.physical_world.doPhysics(dt)
+        self.world.doPhysics(dt)
         return task.cont
+
+
+class StartScreen(NodePath):
+    def __init__(self):
+        super().__init__(PandaNode('startScreen'))
+        # self.reparentTo(base.render)
+        screen = base.loader.loadModel('models/box/box')
+        screen.reparentTo(self)
+        # self.setScale(Vec3(10, 0, 8))
+
+        self.setScale(10)
+        # self.setCollideMask(BitMask32.bit(2))
+        self.setTransparency(TransparencyAttrib.M_alpha)
+        # self.setPos(Point3(0, 0, 2.5))
+        self.setHpr(5, 0, 0)
+        self.setColor(LColor(0, 0, 1, 0))
+        self.colorInterval(5, LColor(0, 0, 1, 1)).start()
+
+    def setup(self):
+        self.setPos(Point3(0, -23, 10))
+        self.reparentTo(base.render)
 
 
 if __name__ == '__main__':
