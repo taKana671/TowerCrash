@@ -1,7 +1,7 @@
 from collections import namedtuple
 from enum import Enum, auto
 
-from direct.gui.DirectGui import OnscreenText, Plain
+from direct.gui.DirectGui import OnscreenText, Plain, OnscreenImage, DirectButton
 from direct.interval.IntervalGlobal import Sequence, Parallel, Func, Wait
 from direct.showbase.ShowBaseGlobal import globalClock
 from direct.showbase.ShowBase import ShowBase
@@ -17,6 +17,8 @@ from tower import CylinderTower, ThinTower, TripleTower, TwinTower, Colors, Bloc
 
 
 PATH_SPHERE = "models/sphere/sphere"
+PATH_TEXTURE_BALL = 'textures/multi.jpg'
+PATH_START_SCREEN = 'images/start.png'
 CHECK_REPEAT = 0.2
 WAIT_COUNT = 5
 RESTART = 1
@@ -137,7 +139,7 @@ class SpecialBall(NodePath):
         super().__init__(PandaNode('specialBall'))
         ball = base.loader.loadModel(PATH_SPHERE)
         ball.setTexture(
-            base.loader.loadTexture('textures/multi.jpg'), 1)
+            base.loader.loadTexture(PATH_TEXTURE_BALL), 1)
         ball.reparentTo(self)
         self.setScale(0.2)
         self.tower = tower
@@ -193,7 +195,8 @@ class TowerCrash(ShowBase):
         self.restart = 0
         self.state = Game.PLAY
         self.click = False
-        # self.start_screen = StartScreen()
+
+        self.start_screen = StartScreen()
 
         # *******************************************
         # collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
@@ -207,9 +210,9 @@ class TowerCrash(ShowBase):
 
     def create_tower(self):
         # self.tower = CylinderTower(24, self.scene.foundation, self.world)
-        # self.tower = ThinTower(16, self.scene.foundation, self.world)
-        # self.tower = TripleTower(24, self.scene.foundation, self.world)
-        self.tower = TwinTower(24, self.scene.foundation, self.world)
+        # self.tower = ThinTower(24, self.scene.foundation, self.world)
+        self.tower = TripleTower(24, self.scene.foundation, self.world)
+        # self.tower = TwinTower(24, self.scene.foundation, self.world)
         self.tower.build()
 
     def setup_lights(self):
@@ -284,7 +287,10 @@ class TowerCrash(ShowBase):
         return angle, distance
 
     def game_over(self):
-        pass
+        self.start_screen.reparentTo(self.aspect2d)
+        # start_screen = StartScreen()
+        # start_screen.screen.reparentTo(self.aspect2d)
+        # start_screen.button.reparentTo(self.aspect2d)
 
     def update(self, task):
         dt = globalClock.getDt()
@@ -322,22 +328,21 @@ class TowerCrash(ShowBase):
 class StartScreen(NodePath):
     def __init__(self):
         super().__init__(PandaNode('startScreen'))
-        # self.reparentTo(base.render)
-        screen = base.loader.loadModel('models/box/box')
-        screen.reparentTo(self)
-        # self.setScale(Vec3(10, 0, 8))
-
-        self.setScale(10)
-        # self.setCollideMask(BitMask32.bit(2))
-        self.setTransparency(TransparencyAttrib.M_alpha)
-        # self.setPos(Point3(0, 0, 2.5))
-        self.setHpr(5, 0, 0)
-        self.setColor(LColor(0, 0, 1, 0))
-        self.colorInterval(5, LColor(0, 0, 1, 1)).start()
-
-    def setup(self):
-        self.setPos(Point3(0, -23, 10))
-        self.reparentTo(base.render)
+        self.screen = OnscreenImage(
+            image=PATH_START_SCREEN,
+            parent=self,
+            scale=(1.5, 1, 1),
+            pos=(0, 0, 0)
+        )
+        self.button = DirectButton(
+            pos=(0, 0, 0),
+            scale=0.1,
+            parent=self,
+            frameSize=(-2, 2, -0.7, 0.7),
+            frameColor=(0.75, 0.75, 0.75, 1),
+            text="start",
+            text_pos=(0, -0.3)
+        )
 
 
 if __name__ == '__main__':
