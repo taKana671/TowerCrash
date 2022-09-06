@@ -39,6 +39,8 @@ class Game(Enum):
     PLAY = auto()
     GAMEOVER = auto()
 
+    START = auto()
+
 
 class ColorBall(NodePath):
 
@@ -107,7 +109,7 @@ class ColorBall(NodePath):
             self.ball.setZ(self.pos.z)
 
 
-class NormalBall(NodePath):  
+class NormalBall(NodePath):
 
     def __init__(self, tower, bubbles):
         super().__init__(PandaNode('normalBall'))
@@ -164,13 +166,11 @@ class TowerCrash(ShowBase):
     def __init__(self):
         super().__init__()
         self.disableMouse()
-        self.camera.setPos(-5, -120, 2.5)
-        # self.camera.setPos(20, -18, 30)
-        ## self.camera.setPos(10, -40, 20)  # 10, -40, 2.5
+        # self.camera.setPos(-5, -120, 2.5)
+        self.camera.setPos(10, -40, 2.5)  # 10, -40, 2.5
         self.camera.setP(10)
-        ## self.camera.lookAt(5, 3, 5)  # 5, 0, 3
-        # self.camera.lookAt(Point3(-2, 12, 2.5))  # 50
-        self.camera.lookAt(Point3(-2, 12, 30))
+        # self.camera.lookAt(Point3(-2, 12, 30))
+        self.camera.lookAt(-2, 12, 12.5)  # 5, 0, 3
         self.camera_lowest_z = 2.5
 
         self.setup_lights()
@@ -181,23 +181,24 @@ class TowerCrash(ShowBase):
         self.scene.setup(self.world)
         self.create_tower()
 
-        camera_z = (self.tower.inactive_top + 1) * 2.5
-        look_z = camera_z + 4 * 2.5
-        self.camera.setPos(Point3(10, -40, camera_z))
-        self.camera.lookAt(Point3(-2, 12, look_z))
+        # camera_z = (self.tower.inactive_top + 1) * 2.5
+        # look_z = camera_z + 4 * 2.5
+        # self.camera.setPos(Point3(10, -40, camera_z))
+        # self.camera.lookAt(Point3(-2, 12, look_z))
         self.camera_move_distance = 0
 
-        self.ball = ColorBall(
-            self.tower, Point3(5.5, -21, self.camera.getZ()))
+        # self.ball = ColorBall(
+        #     self.tower, Point3(5.5, -21, self.camera.getZ()))
 
         self.wait_rotation = 0
         self.next_check = 0
-        self.restart = 0
-        self.state = Game.PLAY
+        self.state = None
+        # self.state = Game.PLAY
         self.click = False
+        self.cnt = 0
 
-        self.start_screen = StartScreen()
-
+        self.start_screen = StartScreen(self)
+        self.start_screen.reparentTo(self.aspect2d)
         # *******************************************
         # collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
         # self.world.setDebugNode(collide_debug.node())
@@ -210,10 +211,27 @@ class TowerCrash(ShowBase):
 
     def create_tower(self):
         # self.tower = CylinderTower(24, self.scene.foundation, self.world)
-        # self.tower = ThinTower(24, self.scene.foundation, self.world)
-        self.tower = TripleTower(24, self.scene.foundation, self.world)
+        self.tower = ThinTower(24, self.scene.foundation, self.world)
+        # self.tower = TripleTower(24, self.scene.foundation, self.world)
         # self.tower = TwinTower(24, self.scene.foundation, self.world)
         self.tower.build()
+
+    def setup_camera(self):
+        if self.cnt < 360:
+            pos = self.tower.rotate(self.camera, 2)
+            z = self.camera.getZ() + ((self.tower.inactive_top + 1) * self.tower.block_h) / 180
+            # z = self.camera.getZ() + ((self.tower.inactive_top + 1) * self.tower.block_h) / 180
+            # if z <= (self.tower.inactive_top + 1) * self.tower.block_h:
+            pos.z = z
+            self.camera.setPos(pos)
+            # self.camera.lookAt(-2, 12, z + self.tower.block_h * 4)
+            self.camera.lookAt(-2, 12, z + 10)
+            self.cnt += 2
+        else:
+            self.ball = ColorBall(
+                self.tower, Point3(5.5, -21, self.camera.getZ()))
+            self.state = Game.PLAY
+
 
     def setup_lights(self):
         ambient_light = self.render.attachNewNode(AmbientLight('ambientLight'))
@@ -283,17 +301,16 @@ class TowerCrash(ShowBase):
                 distance = 10 * dt
                 self.camera.setZ(self.camera.getZ() - distance)
                 self.camera_move_distance -= distance
-
         return angle, distance
 
     def game_over(self):
         self.start_screen.reparentTo(self.aspect2d)
-        # start_screen = StartScreen()
-        # start_screen.screen.reparentTo(self.aspect2d)
-        # start_screen.button.reparentTo(self.aspect2d)
 
     def update(self, task):
         dt = globalClock.getDt()
+
+        if self.state == Game.START:
+            self.setup_camera()
 
         if self.state == Game.PLAY and self.tower.tower_top == 0:
             self.state = Game.GAMEOVER
@@ -326,7 +343,7 @@ class TowerCrash(ShowBase):
 
 
 class StartScreen(NodePath):
-    def __init__(self):
+    def __init__(self, game):
         super().__init__(PandaNode('startScreen'))
         self.screen = OnscreenImage(
             image=PATH_START_SCREEN,
@@ -341,8 +358,15 @@ class StartScreen(NodePath):
             frameSize=(-2, 2, -0.7, 0.7),
             frameColor=(0.75, 0.75, 0.75, 1),
             text="start",
-            text_pos=(0, -0.3)
+            text_pos=(0, -0.3),
+            command=self.click
         )
+        self.game = game
+
+    def click(self):
+        self.detachNode()
+        self.game.state = Game.START
+
 
 
 if __name__ == '__main__':
