@@ -39,13 +39,15 @@ class Game(Enum):
 
 class ColorBall(NodePath):
 
-    def __init__(self, start_pos):
+    def __init__(self):
         super().__init__(PandaNode('ball'))
         self.reparentTo(base.render)
+        self.start_pos = Point3(5.5, -21, 0)
+        self.start_hpr = Vec3(95, 0, 30)
         self.bubbles = Bubbles()
-        self.start_pos = start_pos
         self.special = SpecialBall(self.bubbles)
         self.normal = NormalBall(self.bubbles)
+        self.ball = None
 
         self.ball_number = OnscreenText(
             style=Plain,
@@ -57,13 +59,12 @@ class ColorBall(NodePath):
 
     def initialize(self, tower):
         self.tower = tower
-        self.normal.tower = self.tower
-        self.special.tower = self.tower
-        self.state = None
         self.cnt = 0
-        self.ball = None
-        self.pos = Point3(5.5, -21, 0)
-        self.hpr = Vec3(95, 0, 30)
+        if self.ball is not None and self.ball.hasParent():
+            self._delete()
+        self.state = None
+        self.pos = self.start_pos
+        self.hpr = self.start_hpr
         self.ball_number.setText('')
 
     def setup(self, color, camera_z):
@@ -94,7 +95,7 @@ class ColorBall(NodePath):
         Sequence(
             self.ball.posInterval(0.5, clicked_pos),
             Func(self._delete),
-            Func(self.ball.hit, clicked_pos, block)
+            Func(self.ball.hit, clicked_pos, block, self.tower)
         ).start()
 
     def reposition(self, rotation_angle=None, vertical_distance=None):
@@ -115,22 +116,20 @@ class NormalBall(NodePath):
         ball = base.loader.loadModel(PATH_SPHERE)
         ball.reparentTo(self)
         self.setScale(0.2)
-        self.tower = None
         self.bubbles = bubbles
 
-    def hit(self, clicked_pos, block):
+    def hit(self, clicked_pos, block, tower):
         blocks = []
         if self.getColor() == block.getColor():
-            self.tower.get_neighbors(block, block.getColor(), blocks)
-
+            tower.get_neighbors(block, block.getColor(), blocks)
         para = Parallel(self.bubbles.get_sequence(self.getColor(), clicked_pos))
 
         for block in blocks:
             pos = block.getPos()
-            para.extend([
-                Func(self.tower.clean_up, block),
-                self.bubbles.get_sequence(self.getColor(), pos)
-            ])
+            para.append(Sequence(
+                Func(tower.clean_up, block),
+                self.bubbles.get_sequence(self.getColor(), pos))
+            )
         para.start()
 
 
@@ -139,24 +138,22 @@ class SpecialBall(NodePath):
     def __init__(self, bubbles):
         super().__init__(PandaNode('specialBall'))
         ball = base.loader.loadModel(PATH_SPHERE)
-        ball.setTexture(
-            base.loader.loadTexture(PATH_TEXTURE_BALL), 1)
+        ball.setTexture(base.loader.loadTexture(PATH_TEXTURE_BALL), 1)
         ball.reparentTo(self)
         self.setScale(0.2)
-        self.tower = None
         self.bubbles = bubbles
 
-    def _hit(self, color):
-        for block in self.tower.get_same_colors(color):
+    def _hit(self, color, tower):
+        for block in tower.get_same_colors(color):
             pos = block.getPos()
-            yield Func(self.tower.clean_up, block)
-            yield self.bubbles.get_sequence(color, pos)
+            yield Sequence(Func(tower.clean_up, block),
+                           self.bubbles.get_sequence(color, pos))
 
-    def hit(self, clicked_pos, block):
+    def hit(self, clicked_pos, block, tower):
         color = block.getColor()
         Parallel(
             self.bubbles.get_sequence(Colors.select(), clicked_pos),
-            *[f for f in self._hit(color)]
+            *[seq for seq in self._hit(color, tower)]
         ).start()
 
 
@@ -173,7 +170,7 @@ class TowerCrash(ShowBase):
         self.setup_lights()
         self.scene = Scene()
         self.scene.setup(self.world)
-        self.ball = ColorBall(Point3(5.5, -21, 0))
+        self.ball = ColorBall()
         self.start_screen = StartScreen(self)
         self.initialize_game()
 
@@ -188,19 +185,19 @@ class TowerCrash(ShowBase):
         self.taskMgr.add(self.update, 'update')
 
     def create_tower(self):
-        self.tower = CylinderTower(24, self.scene.foundation, self.world)
+        # self.tower = CylinderTower(24, self.scene.foundation, self.world)
         # self.tower = ThinTower(24, self.scene.foundation, self.world)
         # self.tower = TripleTower(24, self.scene.foundation, self.world)
-        # self.tower = TwinTower(24, self.scene.foundation, self.world)
+        self.tower = TwinTower(24, self.scene.foundation, self.world)
         self.tower.build()
 
     def initialize_game(self):
         self.start_screen.reparentTo(self.aspect2d)
+        self.state = None
         self.camera_move_distance = 0
         self.wait_rotation = 0
         self.wait_start = 0
-        self.next_check = 0
-        self.state = None
+        self.timer = 0
         self.click = False
 
         self.create_tower()
@@ -303,11 +300,15 @@ class TowerCrash(ShowBase):
                 self.ball.setup(Colors.select(), self.camera.getZ())
                 self.state = Game.PLAY
 
-        if self.state == Game.PLAY and self.tower.tower_top == 0:
-            self.state = Game.GAMEOVER
-            self.game_over()
+        if self.state == Game.GAMEOVER:
+            if task.time >= self.timer:
+                self.game_over()
 
         if self.state == Game.PLAY:
+            if self.tower.tower_top == 0:
+                self.timer = task.time + 3
+                self.state = Game.GAMEOVER
+
             if self.click:
                 if clicked := self.control_mouse():
                     self.ball.move(*clicked)
@@ -318,9 +319,9 @@ class TowerCrash(ShowBase):
             self.tower.sink(self.world.contactTest(self.scene.bottom.node()))
 
             activated_rows = 0
-            if task.time >= self.next_check:
+            if task.time >= self.timer:
                 activated_rows = self.tower.activate()
-                self.next_check = task.time + CHECK_REPEAT
+                self.timer = task.time + CHECK_REPEAT
 
             rotation_angle, descent_distance = self.control_camera(dt, activated_rows)
 
@@ -354,6 +355,7 @@ class StartScreen(NodePath):
             command=self.click
         )
         self.game = game
+        print('Screen Scale', self.getScale())
 
     def click(self):
 
@@ -363,7 +365,7 @@ class StartScreen(NodePath):
 
         self.detachNode()
         Sequence(
-            Wait(1),
+            Wait(0.5),
             Func(_start)
         ).start()
 

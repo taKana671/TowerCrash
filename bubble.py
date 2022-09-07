@@ -12,7 +12,7 @@ PATH_BUBBLE = 'models/sphere/sphere'
 class Bubbles:
 
     def __init__(self):
-        self.numbers = [n for n in range(-3, 4) if n != 0]
+        self.numbers = [n for n in range(-5, 5) if n != 0]
         self.bubble = base.loader.loadModel(PATH_BUBBLE)
 
     def create_bubble(self, bubbles, color, pos):
@@ -26,7 +26,7 @@ class Bubbles:
 
     def calc_delta(self):
         x = random.choice(self.numbers)
-        y = -abs(random.choice(self.numbers))
+        y = random.choice(self.numbers)
         z = abs(random.choice(self.numbers))
         d1 = Vec3(x, y, z)
         d2 = Vec3(d1.x * 2, d1.y * 2, -d1.z)
