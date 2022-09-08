@@ -353,6 +353,48 @@ class TripleTower(Tower):
                 self.blocks[i, j] = triangle
 
 
+class CubicTower(Tower):
+
+    def __init__(self, stories, foundation, world):
+        super().__init__(world, stories, foundation, Blocks(12, stories))
+        self.block_h = 2.3
+
+    def build(self):
+        edge = 1.15
+        h = self.block_h
+        normal = Vec3(0.7, 0.7, 0.7)
+        long_hor = Vec3(1.04, 0.7, 0.7)
+        long_ver = Vec3(0.7, 1.04, 0.7)
+        short_hor = Vec3(0.46, 0.7, 0.7)
+        short_ver = Vec3(0.7, 0.46, 0.7)
+
+        points = [
+            [(-3, 3, normal), (-1, 3, normal), (1, 3, normal), (3, 3, normal), (3, 1, normal), (3, -1, normal),
+             (3, -3, normal), (1, -3, normal), (-1, -3, normal), (-3, -3, normal), (-3, -1, normal), (-3, 1, normal)],
+            [(-2.5, 3, long_hor), (0, 3, normal), (2.5, 3, long_hor), (3, 1.32, short_ver), (3, 0, short_ver), (3, -1.32, short_ver),
+             (-2.5, -3, long_hor), (0, -3, normal), (2.5, -3, long_hor), (-3, 1.32, short_ver), (-3, 0, short_ver), (-3, -1.32, short_ver)],
+            [(-1.32, 3, short_hor), (0, 3, short_hor), (1.32, 3, short_hor), (3, 2.5, long_ver), (3, 0, normal), (3, -2.5, long_ver),
+             (1.32, -3, short_hor), (0, -3, short_hor), (-1.32, -3, short_hor), (-3, -2.5, long_ver), (-3, 0, normal), (-3, 2.5, long_ver)]
+        ]
+
+        for i in range(self.blocks.rows):
+            h = self.block_h * (i + 1)
+            pts = points[i % 3]
+
+            for j, (x, y, scale) in enumerate(pts):
+                color, state = self.get_attrib(i)
+                pt = Point3(x * edge, y * edge, h)
+                cube = Cube(self, pt + self.center, str(i * self.blocks.cols + j), color, state, scale)
+                self.world.attachRigidBody(cube.node())
+                cube.node().deactivation_enabled = False
+
+                if state == state.INACTIVE:
+                    cube.node().setMass(0)
+                    cube.node().deactivation_enabled = True
+
+                self.blocks[i, j] = cube
+
+
 class Cylinder(NodePath):
 
     def __init__(self, root, pos, name, color, state, expand=False):
@@ -379,9 +421,9 @@ class Rectangle(NodePath):
     def __init__(self, root, pos, name, color, state, shrink):
         super().__init__(BulletRigidBodyNode(name))
         self.reparentTo(root)
-        cylinder = base.loader.loadModel(PATH_CUBE)
-        cylinder.reparentTo(self)
-        end, tip = cylinder.getTightBounds()
+        rect = base.loader.loadModel(PATH_CUBE)
+        rect.reparentTo(self)
+        end, tip = rect.getTightBounds()
         self.node().addShape(BulletBoxShape((tip - end) / 2))
         n = 3 if not int(name) % 10 else 4
         self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(n))
@@ -414,4 +456,22 @@ class TriangularPrism(NodePath):
         prism_scale = Vec3(0.44, 0.22, 0.44) if expand else 0.22
         prism.setScale(prism_scale)
         prism.reparentTo(self)
+        self.state = state
+
+
+class Cube(NodePath):
+
+    def __init__(self, root, pos, name, color, state, scale):
+        super().__init__(BulletRigidBodyNode(name))
+        self.reparentTo(root)
+        cube = base.loader.loadModel(PATH_CUBE)
+        cube.reparentTo(self)
+        end, tip = cube.getTightBounds()
+        self.node().addShape(BulletBoxShape((tip - end) / 2))
+        n = 3 if not int(name) % 10 else 4
+        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(n))
+        self.node().setMass(1)
+        self.setScale(scale)
+        self.setColor(color)
+        self.setPos(pos)
         self.state = state

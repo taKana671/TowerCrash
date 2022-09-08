@@ -12,7 +12,7 @@ from panda3d.core import AmbientLight, DirectionalLight
 
 from bubble import Bubbles
 from scene import Scene
-from tower import CylinderTower, ThinTower, TripleTower, TwinTower, Colors, Block
+from tower import CylinderTower, ThinTower, TripleTower, TwinTower, CubicTower, Colors, Block
 
 
 PATH_SPHERE = "models/sphere/sphere"
@@ -188,12 +188,14 @@ class TowerCrash(ShowBase):
         # self.tower = CylinderTower(24, self.scene.foundation, self.world)
         # self.tower = ThinTower(24, self.scene.foundation, self.world)
         # self.tower = TripleTower(24, self.scene.foundation, self.world)
-        self.tower = TwinTower(24, self.scene.foundation, self.world)
+        # self.tower = TwinTower(24, self.scene.foundation, self.world)
+        self.tower = CubicTower(24, self.scene.foundation, self.world)
         self.tower.build()
 
     def initialize_game(self):
         self.start_screen.reparentTo(self.aspect2d)
         self.state = None
+        self.state = Game.PLAY
         self.camera_move_distance = 0
         self.wait_rotation = 0
         self.wait_start = 0
@@ -204,6 +206,7 @@ class TowerCrash(ShowBase):
         self.ball.initialize(self.tower)
 
         self.camera_highest_z = (self.tower.inactive_top + 1) * self.tower.block_h
+        # self.camera.setPos(10, -20, 40)
         self.camera.setPos(10, -40, self.camera_lowest_z)  # 10, -40, 2.5
         self.camera.setP(10)
         self.camera.lookAt(-2, 12, self.camera_lowest_z + 4 * 2.5)
@@ -355,7 +358,6 @@ class StartScreen(NodePath):
             command=self.click
         )
         self.game = game
-        print('Screen Scale', self.getScale())
 
     def click(self):
 
