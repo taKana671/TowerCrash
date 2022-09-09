@@ -362,19 +362,13 @@ class CubicTower(Tower):
     def build(self):
         edge = 1.15
         h = self.block_h
-        normal = Vec3(0.7, 0.7, 0.7)
-        long_hor = Vec3(1.04, 0.7, 0.7)
-        long_ver = Vec3(0.7, 1.04, 0.7)
-        short_hor = Vec3(0.46, 0.7, 0.7)
-        short_ver = Vec3(0.7, 0.46, 0.7)
-
         points = [
-            [(-3, 3, normal), (-1, 3, normal), (1, 3, normal), (3, 3, normal), (3, 1, normal), (3, -1, normal),
-             (3, -3, normal), (1, -3, normal), (-1, -3, normal), (-3, -3, normal), (-3, -1, normal), (-3, 1, normal)],
-            [(-2.5, 3, long_hor), (0, 3, normal), (2.5, 3, long_hor), (3, 1.32, short_ver), (3, 0, short_ver), (3, -1.32, short_ver),
-             (-2.5, -3, long_hor), (0, -3, normal), (2.5, -3, long_hor), (-3, 1.32, short_ver), (-3, 0, short_ver), (-3, -1.32, short_ver)],
-            [(-1.32, 3, short_hor), (0, 3, short_hor), (1.32, 3, short_hor), (3, 2.5, long_ver), (3, 0, normal), (3, -2.5, long_ver),
-             (1.32, -3, short_hor), (0, -3, short_hor), (-1.32, -3, short_hor), (-3, -2.5, long_ver), (-3, 0, normal), (-3, 2.5, long_ver)]
+            [(-3, 3, "normal"), (-1, 3, "normal"), (1, 3, "normal"), (3, 3, "normal"), (3, 1, "normal"), (3, -1, "normal"),
+             (3, -3, "normal"), (1, -3, "normal"), (-1, -3, "normal"), (-3, -3, "normal"), (-3, -1, "normal"), (-3, 1, "normal")],
+            [(-2.5, 3, "long_h"), (0, 3, "normal"), (2.5, 3, "long_h"), (3, 1.32, "short_v"), (3, 0, "short_v"), (3, -1.32, "short_v"),
+             (-2.5, -3, "long_h"), (0, -3, "normal"), (2.5, -3, "long_h"), (-3, 1.32, "short_v"), (-3, 0, "short_v"), (-3, -1.32, "short_v")],
+            [(-1.32, 3, "short_h"), (0, 3, "short_h"), (1.32, 3, "short_h"), (3, 2.5, "long_v"), (3, 0, "normal"), (3, -2.5, "long_v"),
+             (1.32, -3, "short_h"), (0, -3, "short_h"), (-1.32, -3, "short_h"), (-3, -2.5, "long_v"), (-3, 0, "normal"), (-3, 2.5, "long_v")]
         ]
 
         for i in range(self.blocks.rows):
@@ -461,6 +455,14 @@ class TriangularPrism(NodePath):
 
 class Cube(NodePath):
 
+    scales = {
+        'normal': Vec3(0.7, 0.7, 0.7),
+        'long_h': Vec3(1.04, 0.7, 0.7),
+        'long_v': Vec3(0.7, 1.04, 0.7),
+        'short_h': Vec3(0.46, 0.7, 0.7),
+        'short_v': Vec3(0.7, 0.46, 0.7)
+    }
+
     def __init__(self, root, pos, name, color, state, scale):
         super().__init__(BulletRigidBodyNode(name))
         self.reparentTo(root)
@@ -471,7 +473,7 @@ class Cube(NodePath):
         n = 3 if not int(name) % 10 else 4
         self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(n))
         self.node().setMass(1)
-        self.setScale(scale)
+        self.setScale(Cube.scales[scale])
         self.setColor(color)
         self.setPos(pos)
         self.state = state
