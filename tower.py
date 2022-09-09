@@ -15,6 +15,9 @@ PATH_CUBE = 'models/cube/cube'
 PATH_TRIANGLE = 'models/trianglular-prism/trianglular-prism'
 
 
+towers = []
+
+
 class Block(Flag):
 
     ACTIVE = auto()
@@ -175,7 +178,99 @@ class Tower(NodePath):
             self.clean_up(block)
 
 
-class CylinderTower(Tower):
+class RegisteredTower(Tower):
+
+    def __init_subclass__(cls):
+        super().__init_subclass__()
+        towers.append(cls)
+
+
+class TwinTower(RegisteredTower):
+
+    def __init__(self, stories, foundation, world):
+        super().__init__(world, stories, foundation, Blocks(7, stories))
+        self.block_h = 2.45
+        edge = 1.5                     # the length of one side
+        half = edge / 2
+        ok = edge / 2 / math.sqrt(3)   # the length of line OK, O: center of triangle
+
+        self.l_center = Point3(-5, 12, 1.0)
+        self.l_even = [(-half, half), (half, half), (-half, -half), (half, -half)]
+        self.l_odd = [(0, 0)]
+
+        self.r_center = Point3(1, 12, 1.0)
+        self.r_even = [(half, -ok), (-half, -ok), (0, ok * 2)]
+        self.r_odd = [(-half, ok), (half, ok), (0, -ok * 2)]
+
+    def left_tower(self, even, h):
+        if even:
+            points = self.l_even
+            expand = False
+        else:
+            points = self.l_odd
+            expand = True
+
+        for x, y in points:
+            pt = Point3(x, y, h) + self.l_center
+            yield (pt, expand)
+
+    def right_tower(self, even, h):
+        points = self.r_even if even else self.r_odd
+        expand = False
+
+        for x, y in points:
+            pt = Point3(x, y, h) + self.r_center
+            yield (pt, expand)
+
+    def block_position(self, even, h):
+        yield from self.left_tower(even, h)
+        yield from self.right_tower(even, h)
+
+    def build(self):
+        for i in range(self.blocks.rows):
+            h = self.block_h * (i + 1)
+            for j, (pt, expand) in enumerate(self.block_position(i % 2 == 0, h)):
+                color, state = self.get_attrib(i)
+                cylinder = Cylinder(self, pt, str(i * self.blocks.cols + j), color, state, expand)
+                self.world.attachRigidBody(cylinder.node())
+                cylinder.node().deactivation_enabled = False
+
+                if state == state.INACTIVE:
+                    cylinder.node().setMass(0)
+                    cylinder.node().deactivation_enabled = True
+
+                self.blocks[i, j] = cylinder
+
+
+class ThinTower(RegisteredTower):
+
+    def __init__(self, stories, foundation, world):
+        super().__init__(world, stories, foundation, Blocks(7, stories))
+        self.block_h = 2.3
+        self.edge = 2.3
+        self.even_row = [-0.5, -1.5, -2.5, 0.5, 1.5, 2.5]
+        self.odd_row = [0, -1, -2, -2.75, 1, 2, 2.75]
+
+    def build(self):
+        for i in range(len(self.blocks)):
+            h = self.block_h * (i + 1)
+            cols = self.even_row if not i % 2 else self.odd_row
+            for j, col in enumerate(cols):
+                color, state = self.get_attrib(i)
+                pos = Point3(self.edge * col, 0, h) + self.center
+                shrink = True if i % 2 and j in {3, 6} else False
+                rect = Rectangle(self, pos, str(i * self.blocks.cols + j), color, state, shrink)
+                self.world.attachRigidBody(rect.node())
+                rect.node().deactivation_enabled = False
+
+                if state == state.INACTIVE:
+                    rect.node().setMass(0)
+                    rect.node().deactivation_enabled = True
+
+                self.blocks[i, j] = rect
+
+
+class CylinderTower(RegisteredTower):
 
     def __init__(self, stories, foundation, world):
         super().__init__(world, stories, foundation, Blocks(18, stories))
@@ -198,17 +293,13 @@ class CylinderTower(Tower):
 
     def build(self):
         for i in range(len(self.blocks)):
+            points = self.pts2d_even if i % 2 == 0 else self.pts2d_odd
             h = (self.block_h * (i + 1))
 
-            if i % 2 == 0:
-                points = [Point3(x, y, h) for x, y in self.pts2d_even]
-            else:
-                points = [Point3(x, y, h) for x, y in self.pts2d_odd]
-
-            for j, pt in enumerate(points):
+            for j, (x, y) in enumerate(points):
+                pt = Point3(x, y, h) + self.center
                 color, state = self.get_attrib(i)
-                cylinder = Cylinder(
-                    self, pt + self.center, str(i * self.blocks.cols + j), color, state)
+                cylinder = Cylinder(self, pt, str(i * self.blocks.cols + j), color, state)
                 self.world.attachRigidBody(cylinder.node())
                 cylinder.node().deactivation_enabled = False
 
@@ -219,130 +310,36 @@ class CylinderTower(Tower):
                 self.blocks[i, j] = cylinder
 
 
-class TwinTower(Tower):
-
-    def __init__(self, stories, foundation, world):
-        super().__init__(world, stories, foundation, Blocks(7, stories))
-        self.block_h = 2.45
-        self.l_center = Point3(-5, 12, 1.0)
-        self.r_center = Point3(1, 12, 1.0)
-
-    def left_tower(self, i, half, h):
-        if i % 2 == 0:
-            points = [
-                Point3(-half, half, h),
-                Point3(half, half, h),
-                Point3(-half, -half, h),
-                Point3(half, -half, h)
-            ]
-            expand = False
-        else:
-            points = [
-                Point3(0, 0, h)
-            ]
-            expand = True
-
-        for pt in points:
-            yield (self.l_center, pt, expand)
-
-    def right_tower(self, i, ok, half, h):
-        expand = False
-
-        if i % 2 == 0:
-            points = [Point3(half, -ok, h), Point3(-half, -ok, h), Point3(0, ok * 2, h)]
-        else:
-            points = [Point3(-half, ok, h), Point3(half, ok, h), Point3(0, -ok * 2, h)]
-
-        for pt in points:
-            yield (self.r_center, pt, expand)
-
-    def block_position(self, i, ok, half, h):
-        yield from self.left_tower(i, half, h)
-        yield from self.right_tower(i, ok, half, h)
-
-    def build(self):
-        edge = 1.5                     # the length of one side
-        half = edge / 2
-        ok = edge / 2 / math.sqrt(3)   # the length of line OK, O: center of triangle
-
-        for i in range(self.blocks.rows):
-            h = (self.block_h * (i + 1))
-            for j, (center, pt, expand) in enumerate(self.block_position(i, ok, half, h)):
-                color, state = self.get_attrib(i)
-                cylinder = Cylinder(
-                    self, pt + center, str(i * self.blocks.cols + j), color, state, expand)
-                self.world.attachRigidBody(cylinder.node())
-                cylinder.node().deactivation_enabled = False
-
-                if state == state.INACTIVE:
-                    cylinder.node().setMass(0)
-                    cylinder.node().deactivation_enabled = True
-
-                self.blocks[i, j] = cylinder
-
-
-class ThinTower(Tower):
-
-    def __init__(self, stories, foundation, world):
-        super().__init__(world, stories, foundation, Blocks(7, stories))
-        self.block_h = 2.3
-        self.even_row = [-0.5, -1.5, -2.5, 0.5, 1.5, 2.5]
-        self.odd_row = [0, -1, -2, -2.75, 1, 2, 2.75]
-
-    def build(self):
-        edge = 2.3
-        for i in range(len(self.blocks)):
-            h = (self.block_h * (i + 1))
-            cols = self.even_row if not i % 2 else self.odd_row
-            for j, col in enumerate(cols):
-                color, state = self.get_attrib(i)
-                pos = Point3(edge * col, 0, h)
-                shrink = True if i % 2 and j in {3, 6} else False
-                rect = Rectangle(
-                    self, pos + self.center, str(i * self.blocks.cols + j), color, state, shrink)
-                self.world.attachRigidBody(rect.node())
-                rect.node().deactivation_enabled = False
-
-                if state == state.INACTIVE:
-                    rect.node().setMass(0)
-                    rect.node().deactivation_enabled = True
-                self.blocks[i, j] = rect
-
-
-class TripleTower(Tower):
+class TripleTower(RegisteredTower):
 
     def __init__(self, stories, foundation, world):
         super().__init__(world, stories, foundation, Blocks(12, stories))
         self.block_h = 2.2  # 2.23
+        self.first_h = 2.46
         self.centers = [Point3(-2, 8, 1.0), Point3(1.5, 13, 1.0), Point3(-5, 14, 1.0)]
-
-    def build(self):
         edge = 2.536
         half = edge / 2
         ok = edge / 2 / math.sqrt(3)  # 0.7320801413324455
-        first_h = 2.46
+        self.even_row = [(0, 0)]
+        self.odd_row = [(0, 0), (half, -ok), (-half, -ok), (0, ok * 2)]
 
+    def build(self):
         for i in range(self.blocks.rows):
-            h = i * self.block_h + first_h
-            if i % 2:
-                points = [
-                    Point3(0, 0, h),
-                    Point3(half, -ok, h),
-                    Point3(-half, -ok, h),
-                    Point3(0, ok * 2, h)
-                ]
-                expand = False
-            else:
-                points = [
-                    Point3(0, 0, h)
-                ]
-                expand = True
+            h = i * self.block_h + self.first_h
 
-            for j, (center, pt) in enumerate(itertools.product(self.centers, points)):
+            if i % 2 == 0:
+                points = self.even_row
+                expand = True
+            else:
+                points = self.odd_row
+                expand = False
+
+            for j, (center, (x, y)) in enumerate(itertools.product(self.centers, points)):
                 color, state = self.get_attrib(i)
+                pt = Point3(x, y, h) + center
                 reverse = True if i % 2 and not j % 4 else False
                 triangle = TriangularPrism(
-                    self, pt + center, str(i * self.blocks.cols + j), color, state, expand, reverse)
+                    self, pt, str(i * self.blocks.cols + j), color, state, expand, reverse)
                 self.world.attachRigidBody(triangle.node())
                 triangle.node().deactivation_enabled = False
 
@@ -353,16 +350,13 @@ class TripleTower(Tower):
                 self.blocks[i, j] = triangle
 
 
-class CubicTower(Tower):
+class CubicTower(RegisteredTower):
 
     def __init__(self, stories, foundation, world):
         super().__init__(world, stories, foundation, Blocks(12, stories))
         self.block_h = 2.3
-
-    def build(self):
-        edge = 1.15
-        h = self.block_h
-        points = [
+        self.edge = 1.15
+        self.points = [
             [(-3, 3, "normal"), (-1, 3, "normal"), (1, 3, "normal"), (3, 3, "normal"), (3, 1, "normal"), (3, -1, "normal"),
              (3, -3, "normal"), (1, -3, "normal"), (-1, -3, "normal"), (-3, -3, "normal"), (-3, -1, "normal"), (-3, 1, "normal")],
             [(-2.5, 3, "long_h"), (0, 3, "normal"), (2.5, 3, "long_h"), (3, 1.32, "short_v"), (3, 0, "short_v"), (3, -1.32, "short_v"),
@@ -371,14 +365,15 @@ class CubicTower(Tower):
              (1.32, -3, "short_h"), (0, -3, "short_h"), (-1.32, -3, "short_h"), (-3, -2.5, "long_v"), (-3, 0, "normal"), (-3, 2.5, "long_v")]
         ]
 
+    def build(self):
         for i in range(self.blocks.rows):
             h = self.block_h * (i + 1)
-            pts = points[i % 3]
+            pts = self.points[i % 3]
 
             for j, (x, y, scale) in enumerate(pts):
                 color, state = self.get_attrib(i)
-                pt = Point3(x * edge, y * edge, h)
-                cube = Cube(self, pt + self.center, str(i * self.blocks.cols + j), color, state, scale)
+                pt = Point3(x * self.edge, y * self.edge, h) + self.center
+                cube = Cube(self, pt, str(i * self.blocks.cols + j), color, state, scale)
                 self.world.attachRigidBody(cube.node())
                 cube.node().deactivation_enabled = False
 

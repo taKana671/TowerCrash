@@ -12,7 +12,7 @@ from panda3d.core import AmbientLight, DirectionalLight
 
 from bubble import Bubbles
 from scene import Scene
-from tower import CylinderTower, ThinTower, TripleTower, TwinTower, CubicTower, Colors, Block
+from tower import towers, Colors, Block
 
 
 PATH_SPHERE = "models/sphere/sphere"
@@ -20,7 +20,6 @@ PATH_TEXTURE_BALL = 'textures/multi.jpg'
 PATH_START_SCREEN = 'images/start.png'
 CHECK_REPEAT = 0.2
 WAIT_COUNT = 5
-RESTART = 1
 
 
 class Ball(Enum):
@@ -163,6 +162,7 @@ class TowerCrash(ShowBase):
         super().__init__()
         self.disableMouse()
         self.camera_lowest_z = 2.5
+        self.tower_num = 0
 
         self.world = BulletWorld()
         self.world.setGravity(Vec3(0, 0, -9.81))
@@ -185,11 +185,12 @@ class TowerCrash(ShowBase):
         self.taskMgr.add(self.update, 'update')
 
     def create_tower(self):
-        # self.tower = CylinderTower(24, self.scene.foundation, self.world)
-        # self.tower = ThinTower(24, self.scene.foundation, self.world)
-        # self.tower = TripleTower(24, self.scene.foundation, self.world)
-        # self.tower = TwinTower(24, self.scene.foundation, self.world)
-        self.tower = CubicTower(24, self.scene.foundation, self.world)
+        tower = towers[self.tower_num]
+        self.tower = tower(24, self.scene.foundation, self.world)
+        self.tower_num += 1
+        if self.tower_num >= len(towers):
+            self.tower_num = 0
+        # self.tower = towers[2](24, self.scene.foundation, self.world)
         self.tower.build()
 
     def initialize_game(self):
