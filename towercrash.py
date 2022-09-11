@@ -66,15 +66,17 @@ class ColorBall(NodePath):
         self.hpr = self.start_hpr
         self.ball_number.setText('')
 
-    def setup(self, color, camera_z):
+    def setup(self, color, camera):
         if color:
             self.ball = self.normal
             self.ball.setColor(color)
         else:
             self.ball = self.special
 
-        self.pos.z = camera_z - 1.5
+        self.pos.z = camera.getZ() - 1.5
         self.ball.setPos(self.pos)
+        # ball's initial h 95 - camera's initial h 12 = 83
+        self.hpr.x = camera.getH() + 83
         self.ball.setHpr(self.hpr)
         self.ball.reparentTo(self)
         self.state = Ball.READY
@@ -101,8 +103,7 @@ class ColorBall(NodePath):
         if rotation_angle:
             self.pos = self.tower.rotate(self.ball, rotation_angle)
             self.ball.setPos(self.pos)
-            self.hpr.x = self.ball.getH() + rotation_angle
-            self.ball.setHpr(self.hpr)
+            self.ball.setH(self.ball.getH() + rotation_angle)
         if vertical_distance:
             self.pos.z -= vertical_distance
             self.ball.setZ(self.pos.z)
@@ -190,7 +191,7 @@ class TowerCrash(ShowBase):
         self.tower_num += 1
         if self.tower_num >= len(towers):
             self.tower_num = 0
-        # self.tower = towers[2](24, self.scene.foundation, self.world)
+        # self.tower = towers[4](24, self.scene.foundation, self.world)
         self.tower.build()
 
     def initialize_game(self):
@@ -199,7 +200,6 @@ class TowerCrash(ShowBase):
         self.state = Game.PLAY
         self.camera_move_distance = 0
         self.wait_rotation = 0
-        self.wait_start = 0
         self.timer = 0
         self.click = False
 
@@ -207,18 +207,21 @@ class TowerCrash(ShowBase):
         self.ball.initialize(self.tower)
 
         self.camera_highest_z = (self.tower.inactive_top + 1) * self.tower.block_h
-        # self.camera.setPos(10, -20, 40)
+        self.moveup = 360
         self.camera.setPos(10, -40, self.camera_lowest_z)  # 10, -40, 2.5
         self.camera.setP(10)
         self.camera.lookAt(-2, 12, self.camera_lowest_z + 4 * 2.5)
 
-    def setup_camera(self):
-        pos = self.tower.rotate(self.camera, 2)
-        z = self.camera.getZ() + self.camera_highest_z / 180
-        pos.z = z
-        self.camera.setPos(pos)
-        self.camera.setH(self.camera.getH() + 2)
-        self.wait_start -= 2
+    def moveup_camera(self):
+        if self.moveup:
+            pos = self.tower.rotate(self.camera, 2)
+            z = self.camera.getZ() + (self.camera_highest_z - 2.5) / 180
+            pos.z = z
+            self.camera.setPos(pos)
+            self.camera.lookAt(-2, 12, z + 4 * 2.5)
+            self.moveup -= 2
+            return True
+        return False
 
     def setup_lights(self):
         ambient_light = self.render.attachNewNode(AmbientLight('ambientLight'))
@@ -298,10 +301,8 @@ class TowerCrash(ShowBase):
         dt = globalClock.getDt()
 
         if self.state == Game.START:
-            if self.wait_start:
-                self.setup_camera()
-            else:
-                self.ball.setup(Colors.select(), self.camera.getZ())
+            if not self.moveup_camera():
+                self.ball.setup(Colors.select(), self.camera)
                 self.state = Game.PLAY
 
         if self.state == Game.GAMEOVER:
@@ -318,7 +319,6 @@ class TowerCrash(ShowBase):
                     self.ball.move(*clicked)
                 self.click = False
 
-            # control the blocks collided with a surface or a bottom.
             self.tower.floating(self.world.contactTest(self.scene.surface.node()))
             self.tower.sink(self.world.contactTest(self.scene.bottom.node()))
 
@@ -332,7 +332,7 @@ class TowerCrash(ShowBase):
             if self.ball.state == Ball.READY:
                 self.ball.reposition(rotation_angle, descent_distance)
             if self.ball.state == Ball.DELETED:
-                self.ball.setup(Colors.select(6), self.camera.getZ())
+                self.ball.setup(Colors.select(6), self.camera)
 
         self.world.doPhysics(dt)
         return task.cont
