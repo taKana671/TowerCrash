@@ -16,7 +16,8 @@ from tower import towers, Colors, Block
 
 
 PATH_SPHERE = "models/sphere/sphere"
-PATH_TEXTURE_BALL = 'textures/multi.jpg'
+PATH_TEXTURE_MULTI = 'textures/multi.jpg'
+PATH_TEXTURE_TWOTONE = 'textures/two_tone.jpg'
 PATH_START_SCREEN = 'images/start.png'
 CHECK_REPEAT = 0.2
 WAIT_COUNT = 5
@@ -44,8 +45,9 @@ class ColorBall(NodePath):
         self.start_pos = Point3(5.5, -21, 0)
         self.start_hpr = Vec3(95, 0, 30)
         self.bubbles = Bubbles()
-        self.special = SpecialBall(self.bubbles)
-        self.normal = NormalBall(self.bubbles)
+        self.normal_ball = NormalBall(self.bubbles)
+        self.multi_ball = MultiColorBall(self.bubbles)
+        self.twotone_ball = TwoToneBall(self.bubbles)
         self.ball = None
 
         self.ball_number = OnscreenText(
@@ -61,17 +63,21 @@ class ColorBall(NodePath):
         self.cnt = 0
         if self.ball is not None and self.ball.hasParent():
             self._delete()
+        self.used = False
         self.state = None
         self.pos = self.start_pos
         self.hpr = self.start_hpr
         self.ball_number.setText('')
 
     def setup(self, color, camera):
-        if color:
-            self.ball = self.normal
-            self.ball.setColor(color)
+        if color == 'MULTI':
+            self.ball = self.multi_ball
+        elif color == 'TWOTONE':
+            self.used = True
+            self.ball = self.twotone_ball
         else:
-            self.ball = self.special
+            self.ball = self.normal_ball
+            self.ball.setColor(color)
 
         self.pos.z = camera.getZ() - 1.5
         self.ball.setPos(self.pos)
@@ -94,7 +100,7 @@ class ColorBall(NodePath):
         self.ball_number.detachNode()
 
         Sequence(
-            self.ball.posInterval(0.5, clicked_pos),
+            self.ball.posHprInterval(0.5, clicked_pos, Vec3(0, 360, 0)),
             Func(self._delete),
             Func(self.ball.hit, clicked_pos, block, self.tower)
         ).start()
@@ -133,12 +139,12 @@ class NormalBall(NodePath):
         para.start()
 
 
-class SpecialBall(NodePath):
+class MultiColorBall(NodePath):
 
     def __init__(self, bubbles):
-        super().__init__(PandaNode('specialBall'))
+        super().__init__(PandaNode('multiColorBall'))
         ball = base.loader.loadModel(PATH_SPHERE)
-        ball.setTexture(base.loader.loadTexture(PATH_TEXTURE_BALL), 1)
+        ball.setTexture(base.loader.loadTexture(PATH_TEXTURE_MULTI), 1)
         ball.reparentTo(self)
         self.setScale(0.2)
         self.bubbles = bubbles
@@ -146,6 +152,31 @@ class SpecialBall(NodePath):
     def _hit(self, color, tower):
         for block in tower.get_same_colors(color):
             pos = block.getPos()
+            yield Sequence(Func(tower.clean_up, block),
+                           self.bubbles.get_sequence(color, pos))
+
+    def hit(self, clicked_pos, block, tower):
+        color = block.getColor()
+        Parallel(
+            self.bubbles.get_sequence(color, clicked_pos),
+            *[seq for seq in self._hit(color, tower)]
+        ).start()
+
+
+class TwoToneBall(NodePath):
+
+    def __init__(self, bubbles):
+        super().__init__(PandaNode('twoToneBall'))
+        ball = base.loader.loadModel(PATH_SPHERE)
+        ball.setTexture(base.loader.loadTexture(PATH_TEXTURE_TWOTONE), 1)
+        ball.reparentTo(self)
+        self.setScale(0.2)
+        self.bubbles = bubbles
+
+    def _hit(self, color, tower):
+        for block in tower.get_different_colors(color):
+            pos = block.getPos()
+            color = block.getColor()
             yield Sequence(Func(tower.clean_up, block),
                            self.bubbles.get_sequence(color, pos))
 
@@ -191,7 +222,7 @@ class TowerCrash(ShowBase):
         self.tower_num += 1
         if self.tower_num >= len(towers):
             self.tower_num = 0
-        # self.tower = towers[4](24, self.scene.foundation, self.world)
+        # self.tower = towers[3](24, self.scene.foundation, self.world)
         self.tower.build()
 
     def initialize_game(self):
@@ -215,7 +246,7 @@ class TowerCrash(ShowBase):
     def moveup_camera(self):
         if self.moveup:
             pos = self.tower.rotate(self.camera, 2)
-            z = self.camera.getZ() + (self.camera_highest_z - 2.5) / 180
+            z = self.camera.getZ() + self.camera_highest_z / 180
             pos.z = z
             self.camera.setPos(pos)
             self.camera.lookAt(-2, 12, z + 4 * 2.5)
@@ -332,7 +363,7 @@ class TowerCrash(ShowBase):
             if self.ball.state == Ball.READY:
                 self.ball.reposition(rotation_angle, descent_distance)
             if self.ball.state == Ball.DELETED:
-                self.ball.setup(Colors.select(6), self.camera)
+                self.ball.setup(Colors.select(7), self.camera)
 
         self.world.doPhysics(dt)
         return task.cont

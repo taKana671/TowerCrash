@@ -35,7 +35,8 @@ class Colors(int, Enum):
     VIOLET = (4, LColor(0.54, 0.16, 0.88, 1))
     MAGENTA = (5, LColor(1, 0, 1, 1))
     MULTI = (6, None)
-    GRAY = (7, LColor(0.25, 0.25, 0.25, 1))
+    TWOTONE = (7, None)
+    GRAY = (8, LColor(0.25, 0.25, 0.25, 1))
 
     def __new__(cls, id_, rgba):
         obj = int.__new__(cls, id_)
@@ -46,7 +47,8 @@ class Colors(int, Enum):
     @classmethod
     def select(cls, b=5):
         n = random.randint(0, b)
-        return cls(n).rgba
+        color = cls(n)
+        return color.rgba if color.rgba else color.name
 
 
 class Blocks:
@@ -113,22 +115,23 @@ class Tower(NodePath):
             return Colors.select(), Block.ACTIVE
 
     def activate(self):
-        activate_rows = 0
         top_block = max(
             (b for b in self.blocks if b.state == Block.ACTIVE),
             key=lambda x: x.getZ())
         tower_top_now = int(top_block.getZ() / self.block_h) - 1
 
+        if (activate_rows := self.tower_top - tower_top_now) <= 0:
+            return 0
+
         if self.inactive_top >= 0:
-            if activate_rows := self.tower_top - tower_top_now:
-                for _ in range(activate_rows):
-                    for block in self.blocks(self.inactive_top):
-                        block.state = Block.ACTIVE
-                        block.clearColor()
-                        block.setColor(Colors.select())
-                        block.node().deactivation_enabled = False
-                        block.node().setMass(1)
-                    self.inactive_top -= 1
+            for _ in range(activate_rows):
+                for block in self.blocks(self.inactive_top):
+                    block.state = Block.ACTIVE
+                    block.clearColor()
+                    block.setColor(Colors.select())
+                    block.node().deactivation_enabled = False
+                    block.node().setMass(1)
+                self.inactive_top -= 1
         self.tower_top = tower_top_now
         return activate_rows
 
@@ -177,11 +180,20 @@ class Tower(NodePath):
         for block in self.blocks:
             self.clean_up(block)
 
+    def get_different_colors(self, color):
+        for block in self.blocks:
+            if block.state == Block.ACTIVE and block.getColor() != color:
+                block.state = Block.DELETE
+                yield block
+
 
 class RegisteredTower(Tower):
 
     def __init_subclass__(cls):
         super().__init_subclass__()
+        if 'build' not in cls.__dict__:
+            raise NotImplementedError("Subclasses should implement 'build'.")
+
         towers.append(cls)
 
 
