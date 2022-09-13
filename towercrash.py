@@ -60,7 +60,7 @@ class ColorBall(NodePath):
 
     def initialize(self, tower):
         self.tower = tower
-        self.cnt = 0
+        self.cnt = 40
         if self.ball is not None and self.ball.hasParent():
             self._delete()
         self.used = False
@@ -87,7 +87,7 @@ class ColorBall(NodePath):
         self.ball.reparentTo(self)
         self.state = Ball.READY
         # show the number of throwing a ball.
-        self.cnt += 1
+        self.cnt -= 1
         self.ball_number.reparentTo(base.aspect2d)
         self.ball_number.setText(str(self.cnt))
 
@@ -341,14 +341,14 @@ class TowerCrash(ShowBase):
                 self.game_over()
 
         if self.state == Game.PLAY:
-            if self.tower.tower_top == 0:
-                self.timer = task.time + 3
-                self.state = Game.GAMEOVER
-
             if self.click:
                 if clicked := self.control_mouse():
                     self.ball.move(*clicked)
                 self.click = False
+
+            if self.tower.tower_top <= 0 or self.ball.cnt == 1:
+                self.timer = task.time + 3
+                self.state = Game.GAMEOVER
 
             self.tower.floating(self.world.contactTest(self.scene.surface.node()))
             self.tower.sink(self.world.contactTest(self.scene.bottom.node()))
@@ -363,7 +363,8 @@ class TowerCrash(ShowBase):
             if self.ball.state == Ball.READY:
                 self.ball.reposition(rotation_angle, descent_distance)
             if self.ball.state == Ball.DELETED:
-                self.ball.setup(Colors.select(7), self.camera)
+                n = 7 if not self.ball.used else 6
+                self.ball.setup(Colors.select(n), self.camera)
 
         self.world.doPhysics(dt)
         return task.cont
