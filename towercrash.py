@@ -60,7 +60,7 @@ class ColorBall(NodePath):
 
     def initialize(self, tower):
         self.tower = tower
-        self.cnt = 40
+        self.cnt = 41
         if self.ball is not None and self.ball.hasParent():
             self._delete()
         self.used = False
@@ -218,11 +218,11 @@ class TowerCrash(ShowBase):
 
     def create_tower(self):
         tower = towers[self.tower_num]
-        self.tower = tower(24, self.scene.foundation, self.world)
-        self.tower_num += 1
-        if self.tower_num >= len(towers):
-            self.tower_num = 0
-        # self.tower = towers[3](24, self.scene.foundation, self.world)
+        # self.tower = tower(24, self.scene.foundation, self.world)
+        # self.tower_num += 1
+        # if self.tower_num >= len(towers):
+        #     self.tower_num = 0
+        self.tower = towers[6](24, self.scene.foundation, self.world)
         self.tower.build()
 
     def initialize_game(self):
@@ -240,6 +240,7 @@ class TowerCrash(ShowBase):
         self.camera_highest_z = (self.tower.inactive_top + 1) * self.tower.block_h
         self.moveup = 360
         self.camera.setPos(10, -40, self.camera_lowest_z)  # 10, -40, 2.5
+        # self.camera.setPos(10, -40, 30)
         self.camera.setP(10)
         self.camera.lookAt(-2, 12, self.camera_lowest_z + 4 * 2.5)
 

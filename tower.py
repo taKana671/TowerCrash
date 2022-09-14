@@ -114,6 +114,15 @@ class Tower(NodePath):
         else:
             return Colors.select(), Block.ACTIVE
 
+    def attach_block(self, state, block):
+        self.world.attachRigidBody(block.node())
+
+        if state == state.ACTIVE:
+            block.node().deactivation_enabled = False
+        else:
+            block.node().setMass(0)
+            block.node().deactivation_enabled = True
+
     def activate(self):
         top_block = max(
             (b for b in self.blocks if b.state == Block.ACTIVE),
@@ -244,13 +253,7 @@ class TwinTower(RegisteredTower):
             for j, (pt, expand) in enumerate(self.block_position(i % 2 == 0, h)):
                 color, state = self.get_attrib(i)
                 cylinder = Cylinder(self, pt, str(i * self.blocks.cols + j), color, state, expand)
-                self.world.attachRigidBody(cylinder.node())
-                cylinder.node().deactivation_enabled = False
-
-                if state == state.INACTIVE:
-                    cylinder.node().setMass(0)
-                    cylinder.node().deactivation_enabled = True
-
+                self.attach_block(state, cylinder)
                 self.blocks[i, j] = cylinder
 
 
@@ -266,19 +269,13 @@ class ThinTower(RegisteredTower):
     def build(self):
         for i in range(len(self.blocks)):
             h = self.block_h * (i + 1)
-            cols = self.even_row if not i % 2 else self.odd_row
-            for j, col in enumerate(cols):
+            points = self.even_row if not i % 2 else self.odd_row
+            for j, pt in enumerate(points):
                 color, state = self.get_attrib(i)
-                pos = Point3(self.edge * col, 0, h) + self.center
-                shrink = True if i % 2 and j in {3, 6} else False
-                rect = Rectangle(self, pos, str(i * self.blocks.cols + j), color, state, shrink)
-                self.world.attachRigidBody(rect.node())
-                rect.node().deactivation_enabled = False
-
-                if state == state.INACTIVE:
-                    rect.node().setMass(0)
-                    rect.node().deactivation_enabled = True
-
+                pos = Point3(self.edge * pt, 0, h) + self.center
+                sx = 0.35 if i % 2 and j in {3, 6} else 0.7
+                rect = Rectangle(self, pos, str(i * self.blocks.cols + j), color, state, sx)
+                self.attach_block(state, rect)
                 self.blocks[i, j] = rect
 
 
@@ -312,13 +309,7 @@ class CylinderTower(RegisteredTower):
                 pt = Point3(x, y, h) + self.center
                 color, state = self.get_attrib(i)
                 cylinder = Cylinder(self, pt, str(i * self.blocks.cols + j), color, state)
-                self.world.attachRigidBody(cylinder.node())
-                cylinder.node().deactivation_enabled = False
-
-                if state == state.INACTIVE:
-                    cylinder.node().setMass(0)
-                    cylinder.node().deactivation_enabled = True
-
+                self.attach_block(state, cylinder)
                 self.blocks[i, j] = cylinder
 
 
@@ -352,13 +343,7 @@ class TripleTower(RegisteredTower):
                 reverse = True if i % 2 and not j % 4 else False
                 triangle = TriangularPrism(
                     self, pt, str(i * self.blocks.cols + j), color, state, expand, reverse)
-                self.world.attachRigidBody(triangle.node())
-                triangle.node().deactivation_enabled = False
-
-                if state == state.INACTIVE:
-                    triangle.node().setMass(0)
-                    triangle.node().deactivation_enabled = True
-
+                self.attach_block(state, triangle)
                 self.blocks[i, j] = triangle
 
 
@@ -386,13 +371,61 @@ class CubicTower(RegisteredTower):
                 color, state = self.get_attrib(i)
                 pt = Point3(x * self.edge, y * self.edge, h) + self.center
                 cube = Cube(self, pt, str(i * self.blocks.cols + j), color, state, scale)
-                self.world.attachRigidBody(cube.node())
-                cube.node().deactivation_enabled = False
+                self.attach_block(state, cube)
+                self.blocks[i, j] = cube
 
-                if state == state.INACTIVE:
-                    cube.node().setMass(0)
-                    cube.node().deactivation_enabled = True
 
+class HShapedTower(RegisteredTower):
+
+    def __init__(self, stories, foundation, world):
+        super().__init__(world, stories, foundation, Blocks(10, stories))
+        self.block_h = 2.3
+        self.edge = 1.15
+        # (x, y, sx, heading)
+        self.even_row = [
+            (-1, 0, 0.7, 0), (-3, 0, 0.7, 0), (1, 0, 0.7, 0), (3, 0, 0.7, 0),
+            (4.5, 0, 0.7, 90), (4.5, 2, 0.7, 90), (4.5, -2, 0.7, -92),
+            (-4.5, 0, 0.7, 90), (-4.5, 2, 0.7, 90), (-4.5, -2, 0.7, -92)]
+        self.odd_row = [
+            (0, 0, 0.7, 0), (-2, 0, 0.7, 0), (-4, 0, 0.7, 0), (2, 0, 0.7, 0), (4, 0, 0.7, 0),
+            (4.5, 1.75, 0.875, 90), (4.5, -1.75, 0.875, 90),
+            (-4.5, 1.75, 0.875, 90), (-4.5, -1.75, 0.875, 90)]
+
+    def build(self):
+        for i in range(len(self.blocks)):
+            h = self.block_h * (i + 1)
+            cols = self.even_row if not i % 2 else self.odd_row
+            for j, (x, y, sx, heading) in enumerate(cols):
+                color, state = self.get_attrib(i)
+                pos = Point3(x * self.edge, y * self.edge, h) + self.center
+                rect = Rectangle(self, pos, str(i * self.blocks.cols + j), color, state, sx, heading)
+                self.attach_block(state, rect)
+                self.blocks[i, j] = rect
+
+
+class CrossTower(RegisteredTower):
+
+    def __init__(self, stories, foundation, world):
+        super().__init__(world, stories, foundation, Blocks(9, stories))
+        self.block_h = 2.3
+        self.edge = 2.3
+        self.even_row = [
+            (0, 0, 'normal', 0), (-1, 0, 'normal', 0), (-2, 0, 'normal', 0), (1, 0, 'normal', 0), (2, 0, 'normal', 0),
+            (0, 1, 'normal', 0), (0, 2, 'normal', 0), (0, -1, 'normal', 0), (0, -2, 'normal', 0)]
+        self.odd_row = [
+            (0, 0, 'large', 45), (-1.75, 0, 'long', 0), (1.75, 0, 'long', 0),
+            (0, -1.75, 'long', 90), (0, 1.75, 'long', 90)]
+
+    def build(self):
+        for i in range(self.blocks.rows):
+            h = self.block_h * (i + 1)
+            points = self.even_row if i % 2 == 0 else self.odd_row
+
+            for j, (x, y, scale, heading) in enumerate(points):
+                color, state = self.get_attrib(i)
+                pt = Point3(x * self.edge, y * self.edge, h) + self.center
+                cube = Cube(self, pt, str(i * self.blocks.cols + j), color, state, scale, heading)
+                self.attach_block(state, cube)
                 self.blocks[i, j] = cube
 
 
@@ -419,7 +452,7 @@ class Cylinder(NodePath):
 
 class Rectangle(NodePath):
 
-    def __init__(self, root, pos, name, color, state, shrink):
+    def __init__(self, root, pos, name, color, state, sx, heading=0):
         super().__init__(BulletRigidBodyNode(name))
         self.reparentTo(root)
         rect = base.loader.loadModel(PATH_CUBE)
@@ -429,10 +462,10 @@ class Rectangle(NodePath):
         n = 3 if not int(name) % 10 else 4
         self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(n))
         self.node().setMass(1)
-        sx = 0.35 if shrink else 0.7
         self.setScale(Vec3(sx, 0.35, 0.7))
         self.setColor(color)
         self.setPos(pos)
+        self.setH(heading)
         self.state = state
 
 
@@ -467,10 +500,12 @@ class Cube(NodePath):
         'long_h': Vec3(1.04, 0.7, 0.7),
         'long_v': Vec3(0.7, 1.04, 0.7),
         'short_h': Vec3(0.46, 0.7, 0.7),
-        'short_v': Vec3(0.7, 0.46, 0.7)
+        'short_v': Vec3(0.7, 0.46, 0.7),
+        'large': Vec3(1.02, 1.02, 0.7),
+        'long': Vec3(1.04, 0.7, 0.7),
     }
 
-    def __init__(self, root, pos, name, color, state, scale):
+    def __init__(self, root, pos, name, color, state, scale, heading=0):
         super().__init__(BulletRigidBodyNode(name))
         self.reparentTo(root)
         cube = base.loader.loadModel(PATH_CUBE)
@@ -483,4 +518,6 @@ class Cube(NodePath):
         self.setScale(Cube.scales[scale])
         self.setColor(color)
         self.setPos(pos)
+        if heading:
+            self.setH(heading)
         self.state = state
