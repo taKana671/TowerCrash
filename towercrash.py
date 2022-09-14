@@ -218,11 +218,11 @@ class TowerCrash(ShowBase):
 
     def create_tower(self):
         tower = towers[self.tower_num]
-        # self.tower = tower(24, self.scene.foundation, self.world)
-        # self.tower_num += 1
-        # if self.tower_num >= len(towers):
-        #     self.tower_num = 0
-        self.tower = towers[6](24, self.scene.foundation, self.world)
+        self.tower = tower(24, self.scene.foundation, self.world)
+        self.tower_num += 1
+        if self.tower_num >= len(towers):
+            self.tower_num = 0
+        # self.tower = towers[6](24, self.scene.foundation, self.world)
         self.tower.build()
 
     def initialize_game(self):
