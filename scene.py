@@ -1,4 +1,5 @@
 from direct.showbase.ShowBase import ShowBase
+from direct.interval.IntervalGlobal import Sequence, Wait
 from panda3d.bullet import BulletRigidBodyNode
 from panda3d.bullet import BulletPlaneShape, BulletCylinderShape
 from panda3d.core import Vec3, Point3, LColor, BitMask32
@@ -70,7 +71,7 @@ class Sea(NodePath):
         sea.reparentTo(self)
         self.setTransparency(TransparencyAttrib.M_alpha)
         self.setScale(13)
-        self.setPos(-2, 0, 0.5)
+        self.setPos(-2, 12, 0.5)
         self.setColor(LColor(0.25, 0.41, 1, 0.3))
         self.setR(180)
 

@@ -96,6 +96,7 @@ class Blocks:
 
 
 class Tower(NodePath):
+
     def __init__(self, world, stories, foundation, blocks):
         super().__init__(PandaNode('tower'))
         self.reparentTo(base.render)
@@ -179,9 +180,9 @@ class Tower(NodePath):
                 if neighbor not in blocks and neighbor.getColor() == color:
                     self.get_neighbors(neighbor, color, blocks)
 
-    def get_same_colors(self, color):
+    def judge_colors(self, judge_color):
         for block in self.blocks:
-            if block.state == Block.ACTIVE and block.getColor() == color:
+            if block.state == Block.ACTIVE and judge_color(block):
                 block.state = Block.DELETE
                 yield block
 
@@ -189,11 +190,13 @@ class Tower(NodePath):
         for block in self.blocks:
             self.clean_up(block)
 
-    def get_different_colors(self, color):
-        for block in self.blocks:
-            if block.state == Block.ACTIVE and block.getColor() != color:
-                block.state = Block.DELETE
-                yield block
+    def clear_foundation(self, bubbles):
+        result = self.world.contactTest(self.foundation.node())
+
+        for name in set(con.getNode1().getName() for con in result.getContacts()):
+            block = self.blocks.find(name)
+            bubbles.get_sequence(block.getColor(), block.getPos()).start()
+            self.clean_up(block)
 
 
 class RegisteredTower(Tower):
@@ -201,12 +204,16 @@ class RegisteredTower(Tower):
     def __init_subclass__(cls):
         super().__init_subclass__()
         if 'build' not in cls.__dict__:
-            raise NotImplementedError("Subclasses should implement 'build'.")
+            raise NotImplementedError(f"Subclasses should implement 'build'. {cls.__name__} has no build.")
+        if 'level' not in cls.__dict__:
+            raise NotImplementedError(f"Subclasses should implement 'level'. {cls.__name__} has no level.")
 
         towers.append(cls)
 
 
 class TwinTower(RegisteredTower):
+
+    level = 20
 
     def __init__(self, stories, foundation, world):
         super().__init__(world, stories, foundation, Blocks(7, stories))
@@ -259,6 +266,8 @@ class TwinTower(RegisteredTower):
 
 class ThinTower(RegisteredTower):
 
+    level = 20
+
     def __init__(self, stories, foundation, world):
         super().__init__(world, stories, foundation, Blocks(7, stories))
         self.block_h = 2.3
@@ -280,6 +289,8 @@ class ThinTower(RegisteredTower):
 
 
 class CylinderTower(RegisteredTower):
+
+    level = 30
 
     def __init__(self, stories, foundation, world):
         super().__init__(world, stories, foundation, Blocks(18, stories))
@@ -315,6 +326,8 @@ class CylinderTower(RegisteredTower):
 
 class TripleTower(RegisteredTower):
 
+    level = 35
+
     def __init__(self, stories, foundation, world):
         super().__init__(world, stories, foundation, Blocks(12, stories))
         self.block_h = 2.2  # 2.23
@@ -349,17 +362,20 @@ class TripleTower(RegisteredTower):
 
 class CubicTower(RegisteredTower):
 
+    level = 35
+
     def __init__(self, stories, foundation, world):
         super().__init__(world, stories, foundation, Blocks(12, stories))
         self.block_h = 2.3
         self.edge = 1.15
+
         self.points = [
-            [(-3, 3, "normal"), (-1, 3, "normal"), (1, 3, "normal"), (3, 3, "normal"), (3, 1, "normal"), (3, -1, "normal"),
-             (3, -3, "normal"), (1, -3, "normal"), (-1, -3, "normal"), (-3, -3, "normal"), (-3, -1, "normal"), (-3, 1, "normal")],
-            [(-2.5, 3, "long_h"), (0, 3, "normal"), (2.5, 3, "long_h"), (3, 1.32, "short_v"), (3, 0, "short_v"), (3, -1.32, "short_v"),
-             (-2.5, -3, "long_h"), (0, -3, "normal"), (2.5, -3, "long_h"), (-3, 1.32, "short_v"), (-3, 0, "short_v"), (-3, -1.32, "short_v")],
-            [(-1.32, 3, "short_h"), (0, 3, "short_h"), (1.32, 3, "short_h"), (3, 2.5, "long_v"), (3, 0, "normal"), (3, -2.5, "long_v"),
-             (1.32, -3, "short_h"), (0, -3, "short_h"), (-1.32, -3, "short_h"), (-3, -2.5, "long_v"), (-3, 0, "normal"), (-3, 2.5, "long_v")]
+            [(-3, 3, "normal", 0), (-1, 3, "normal", 0), (1, 3, "normal", 0), (3, 3, "normal", 0), (3, 1, "normal", 0), (3, -1, "normal", 0),
+             (3, -3, "normal", 0), (1, -3, "normal", 0), (-1, -3, "normal", 0), (-3, -3, "normal", 0), (-3, -1, "normal", 0), (-3, 1, "normal", 0)],
+            [(-2.5, 3, "long", 0), (0, 3, "normal", 0), (2.5, 3, "long", 0), (3, 1.32, "short", 90), (3, 0, "short", 90), (3, -1.32, "short", 90),
+             (-2.5, -3, "long", 0), (0, -3, "normal", 0), (2.5, -3, "long", 0), (-3, 1.32, "short", 90), (-3, 0, "short", 90), (-3, -1.32, "short", 90)],
+            [(-1.32, 3, "short", 0), (0, 3, "short", 0), (1.32, 3, "short", 0), (3, 2.5, "long", 90), (3, 0, "normal", 0), (3, -2.5, "long", 90),
+             (1.32, -3, "short", 0), (0, -3, "short", 0), (-1.32, -3, "short", 0), (-3, -2.5, "long", 90), (-3, 0, "normal", 0), (-3, 2.5, "long", 90)]
         ]
 
     def build(self):
@@ -367,15 +383,17 @@ class CubicTower(RegisteredTower):
             h = self.block_h * (i + 1)
             pts = self.points[i % 3]
 
-            for j, (x, y, scale) in enumerate(pts):
+            for j, (x, y, scale, heading) in enumerate(pts):
                 color, state = self.get_attrib(i)
                 pt = Point3(x * self.edge, y * self.edge, h) + self.center
-                cube = Cube(self, pt, str(i * self.blocks.cols + j), color, state, scale)
+                cube = Cube(self, pt, str(i * self.blocks.cols + j), color, state, scale, heading)
                 self.attach_block(state, cube)
                 self.blocks[i, j] = cube
 
 
 class HShapedTower(RegisteredTower):
+
+    level = 30
 
     def __init__(self, stories, foundation, world):
         super().__init__(world, stories, foundation, Blocks(10, stories))
@@ -405,10 +423,13 @@ class HShapedTower(RegisteredTower):
 
 class CrossTower(RegisteredTower):
 
+    level = 30
+
     def __init__(self, stories, foundation, world):
         super().__init__(world, stories, foundation, Blocks(9, stories))
         self.block_h = 2.3
         self.edge = 2.3
+        # (x, y, scale, heading)
         self.even_row = [
             (0, 0, 'normal', 0), (-1, 0, 'normal', 0), (-2, 0, 'normal', 0), (1, 0, 'normal', 0), (2, 0, 'normal', 0),
             (0, 1, 'normal', 0), (0, 2, 'normal', 0), (0, -1, 'normal', 0), (0, -2, 'normal', 0)]
@@ -497,10 +518,7 @@ class Cube(NodePath):
 
     scales = {
         'normal': Vec3(0.7, 0.7, 0.7),
-        'long_h': Vec3(1.04, 0.7, 0.7),
-        'long_v': Vec3(0.7, 1.04, 0.7),
-        'short_h': Vec3(0.46, 0.7, 0.7),
-        'short_v': Vec3(0.7, 0.46, 0.7),
+        'short': Vec3(0.46, 0.7, 0.7),
         'large': Vec3(1.02, 1.02, 0.7),
         'long': Vec3(1.04, 0.7, 0.7),
     }

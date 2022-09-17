@@ -35,19 +35,19 @@ class Game(Enum):
     PLAY = auto()
     GAMEOVER = auto()
     START = auto()
+    CLEAR = auto()
 
 
 class ColorBall(NodePath):
 
-    def __init__(self):
+    def __init__(self, bubbles):
         super().__init__(PandaNode('ball'))
         self.reparentTo(base.render)
         self.start_pos = Point3(5.5, -21, 0)
         self.start_hpr = Vec3(95, 0, 30)
-        self.bubbles = Bubbles()
-        self.normal_ball = NormalBall(self.bubbles)
-        self.multi_ball = MultiColorBall(self.bubbles)
-        self.twotone_ball = TwoToneBall(self.bubbles)
+        self.normal_ball = NormalBall(bubbles)
+        self.multi_ball = MultiColorBall(bubbles)
+        self.twotone_ball = TwoToneBall(bubbles)
         self.ball = None
 
         self.ball_number = OnscreenText(
@@ -60,7 +60,7 @@ class ColorBall(NodePath):
 
     def initialize(self, tower):
         self.tower = tower
-        self.cnt = 41
+        self.cnt = self.tower.level
         if self.ball is not None and self.ball.hasParent():
             self._delete()
         self.used = False
@@ -87,7 +87,6 @@ class ColorBall(NodePath):
         self.ball.reparentTo(self)
         self.state = Ball.READY
         # show the number of throwing a ball.
-        self.cnt -= 1
         self.ball_number.reparentTo(base.aspect2d)
         self.ball_number.setText(str(self.cnt))
 
@@ -96,6 +95,7 @@ class ColorBall(NodePath):
         self.state = Ball.DELETED
 
     def move(self, clicked_pos, block):
+        self.cnt -= 1
         self.state = Ball.MOVE
         self.ball_number.detachNode()
 
@@ -150,7 +150,7 @@ class MultiColorBall(NodePath):
         self.bubbles = bubbles
 
     def _hit(self, color, tower):
-        for block in tower.get_same_colors(color):
+        for block in tower.judge_colors(lambda x: x.getColor() == color):
             pos = block.getPos()
             yield Sequence(Func(tower.clean_up, block),
                            self.bubbles.get_sequence(color, pos))
@@ -174,7 +174,7 @@ class TwoToneBall(NodePath):
         self.bubbles = bubbles
 
     def _hit(self, color, tower):
-        for block in tower.get_different_colors(color):
+        for block in tower.judge_colors(lambda x: x.getColor() != color):
             pos = block.getPos()
             color = block.getColor()
             yield Sequence(Func(tower.clean_up, block),
@@ -202,7 +202,9 @@ class TowerCrash(ShowBase):
         self.setup_lights()
         self.scene = Scene()
         self.scene.setup(self.world)
-        self.ball = ColorBall()
+        self.bubbles = Bubbles()
+        self.ball = ColorBall(self.bubbles)
+        self.gameover_seq = Sequence(Wait(3))
         self.start_screen = StartScreen(self)
         self.initialize_game()
 
@@ -216,29 +218,24 @@ class TowerCrash(ShowBase):
         self.accept('mouse1-up', self.mouse_release)
         self.taskMgr.add(self.update, 'update')
 
-    def create_tower(self):
-        tower = towers[self.tower_num]
-        self.tower = tower(24, self.scene.foundation, self.world)
-        self.tower_num += 1
-        if self.tower_num >= len(towers):
-            self.tower_num = 0
-        # self.tower = towers[6](24, self.scene.foundation, self.world)
-        self.tower.build()
-
     def initialize_game(self):
         self.start_screen.reparentTo(self.aspect2d)
         self.state = None
-        self.state = Game.PLAY
         self.camera_move_distance = 0
         self.wait_rotation = 0
         self.timer = 0
         self.click = False
 
-        self.create_tower()
+        tower = towers[self.tower_num]
+        self.tower = tower(24, self.scene.foundation, self.world)
+        self.tower.build()
         self.ball.initialize(self.tower)
 
-        self.camera_highest_z = (self.tower.inactive_top + 1) * self.tower.block_h
+        for _ in range(len(self.gameover_seq) - 1):
+            self.gameover_seq.pop()
+
         self.moveup = 360
+        self.camera_highest_z = (self.tower.inactive_top + 1) * self.tower.block_h
         self.camera.setPos(10, -40, self.camera_lowest_z)  # 10, -40, 2.5
         # self.camera.setPos(10, -40, 30)
         self.camera.setP(10)
@@ -325,7 +322,18 @@ class TowerCrash(ShowBase):
                 self.camera_move_distance -= distance
         return angle, distance
 
+    def clear(self):
+        if self.tower.tower_top <= 0:
+            self.gameover_seq.append(Func(self.tower.clear_foundation, self.bubbles))
+        self.gameover_seq.append(Wait(2))
+        self.gameover_seq.start()
+
     def game_over(self):
+        if self.tower.tower_top <= 0:
+            self.tower_num += 1
+        if self.tower_num >= len(towers):
+            self.tower_num = 0
+
         self.tower.remove_blocks()
         self.initialize_game()
 
@@ -337,8 +345,12 @@ class TowerCrash(ShowBase):
                 self.ball.setup(Colors.select(), self.camera)
                 self.state = Game.PLAY
 
+        if self.state == Game.CLEAR:
+            self.clear()
+            self.state = Game.GAMEOVER
+
         if self.state == Game.GAMEOVER:
-            if task.time >= self.timer:
+            if not self.gameover_seq.isPlaying():
                 self.game_over()
 
         if self.state == Game.PLAY:
@@ -347,9 +359,8 @@ class TowerCrash(ShowBase):
                     self.ball.move(*clicked)
                 self.click = False
 
-            if self.tower.tower_top <= 0 or self.ball.cnt == 1:
-                self.timer = task.time + 3
-                self.state = Game.GAMEOVER
+            if self.tower.tower_top <= 0 or self.ball.cnt == 0:
+                self.state = Game.CLEAR
 
             self.tower.floating(self.world.contactTest(self.scene.surface.node()))
             self.tower.sink(self.world.contactTest(self.scene.bottom.node()))
@@ -363,7 +374,7 @@ class TowerCrash(ShowBase):
 
             if self.ball.state == Ball.READY:
                 self.ball.reposition(rotation_angle, descent_distance)
-            if self.ball.state == Ball.DELETED:
+            if self.ball.state == Ball.DELETED and self.ball.cnt > 0:
                 n = 7 if not self.ball.used else 6
                 self.ball.setup(Colors.select(n), self.camera)
 
@@ -393,17 +404,12 @@ class StartScreen(NodePath):
         )
         self.game = game
 
+    def _start(self):
+        self.game.state = Game.START
+
     def click(self):
-
-        def _start():
-            self.game.wait_start = 360
-            self.game.state = Game.START
-
         self.detachNode()
-        Sequence(
-            Wait(0.5),
-            Func(_start)
-        ).start()
+        Sequence(Wait(0.5), Func(self._start)).start()
 
 
 if __name__ == '__main__':
