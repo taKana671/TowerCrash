@@ -23,4 +23,5 @@ Tower Crash Game made with Python and Panda3D
 * A multi colored ball can delete all of the blocks having the same color with the clicked block.
 * A black and white ball can delete all of the blocks having the different color with the clicked block.
 * If the tower is successfully broken, you can try next tower.
+* You can enjoy 7 towers.
 
