@@ -25,3 +25,4 @@ Tower Crash Game made with Python and Panda3D
 * If the tower is successfully broken, you can try next tower.
 * You can enjoy 7 towers.
 
+![seven_towers](https://user-images.githubusercontent.com/48859041/190887173-18fb07cc-245c-494e-81bd-4e095eb45ad7.png)
