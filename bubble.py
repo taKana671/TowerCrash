@@ -54,12 +54,8 @@ class Bubbles:
 
 
 if __name__ == '__main__':
-    # from window import Window
     base = ShowBase()
-    # Window('game')
-    # base.setBackgroundColor(0.5, 0.8, 1)
     base.disableMouse()
-
     base.camera.setPos(20, -18, 20)  # 20, -20, 5
     base.camera.setP(-80)
     base.camera.lookAt(5, 3, 5)  # 5, 0, 3

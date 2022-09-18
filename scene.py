@@ -1,5 +1,4 @@
 from direct.showbase.ShowBase import ShowBase
-from direct.interval.IntervalGlobal import Sequence, Wait
 from panda3d.bullet import BulletRigidBodyNode
 from panda3d.bullet import BulletPlaneShape, BulletCylinderShape
 from panda3d.core import Vec3, Point3, LColor, BitMask32
@@ -93,17 +92,11 @@ class Scene:
 
 
 if __name__ == '__main__':
-    # from window import Window
     base = ShowBase()
-    # Window('game')
-    # base.setBackgroundColor(0.5, 0.8, 1)
     base.disableMouse()
     base.camera.setPos(10, -40, 10)  # 20, -20, 5
     # base.camera.setPos(-2, 12, 30)  # 20, -20, 5
     # base.camera.setP(-80)
     base.camera.lookAt(-2, 12, 10)  # 5, 0, 3
-    
-    # rect = Rect()
-    # Cylinder()
     scene = Scene()
     base.run()

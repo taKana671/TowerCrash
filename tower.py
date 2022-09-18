@@ -1,7 +1,7 @@
 import itertools
 import math
 import random
-from enum import Enum, Flag, auto
+from enum import Enum, auto
 
 from panda3d.bullet import BulletCylinderShape, BulletBoxShape, BulletConvexHullShape
 from panda3d.bullet import BulletRigidBodyNode
@@ -18,7 +18,7 @@ PATH_TRIANGLE = 'models/trianglular-prism/trianglular-prism'
 towers = []
 
 
-class Block(Flag):
+class Block(Enum):
 
     ACTIVE = auto()
     INACTIVE = auto()
@@ -104,10 +104,12 @@ class Tower(NodePath):
         self.world = world
         self.blocks = blocks
         self.axis = Vec3.up()
-        self.center = Point3(-2, 12, 1.0)
+        # self.center = Point3(-2, 12, 1.0)
+        pt = self.foundation.getPos()
+        pt.z = 1.0
+        self.center = pt  # Point3(-2, 12, 1.0)
         self.tower_top = stories - 1
         self.inactive_top = stories - 9
-        # self.inactive_top = int(stories * 2 / 3) - 1
 
     def get_attrib(self, i):
         if i <= self.inactive_top:
@@ -204,9 +206,11 @@ class RegisteredTower(Tower):
     def __init_subclass__(cls):
         super().__init_subclass__()
         if 'build' not in cls.__dict__:
-            raise NotImplementedError(f"Subclasses should implement 'build'. {cls.__name__} has no build.")
+            raise NotImplementedError(
+                f"Subclasses should implement 'build'. {cls.__name__} has no build.")
         if 'level' not in cls.__dict__:
-            raise NotImplementedError(f"Subclasses should implement 'level'. {cls.__name__} has no level.")
+            raise NotImplementedError(
+                f"Subclasses should implement 'level'. {cls.__name__} has no level.")
 
         towers.append(cls)
 
@@ -290,7 +294,7 @@ class ThinTower(RegisteredTower):
 
 class CylinderTower(RegisteredTower):
 
-    level = 30
+    level = 35
 
     def __init__(self, stories, foundation, world):
         super().__init__(world, stories, foundation, Blocks(18, stories))
@@ -530,7 +534,7 @@ class Cube(NodePath):
         cube.reparentTo(self)
         end, tip = cube.getTightBounds()
         self.node().addShape(BulletBoxShape((tip - end) / 2))
-        n = 3 if not int(name) % 10 else 4
+        n = 3 if not int(name) % 20 else 4
         self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(n))
         self.node().setMass(1)
         self.setScale(Cube.scales[scale])
