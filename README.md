@@ -22,7 +22,7 @@ Tower Crash Game made with Python and Panda3D
 * Click on a block having the same color with a ball to delete the block.
 * A multi colored ball can delete all of the blocks having the same color with the clicked block.
 * A black and white ball can delete all of the blocks having the different color with the clicked block.
-* If successfully break the tower, you can try the next tower.
+* If successfully break the tower, you can try the next one.
 * Let's enjoy 7 towers!
 
 ![seven_towers](https://user-images.githubusercontent.com/48859041/190887173-18fb07cc-245c-494e-81bd-4e095eb45ad7.png)
