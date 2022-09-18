@@ -13,7 +13,7 @@ Tower Crash Game made with Python and Panda3D
 # Usage
 * Execute a command below on the command line.
 ```
->>>python cubic_same_game.py
+>>>python towercrash.py
 ```
 
 ### Controls:
