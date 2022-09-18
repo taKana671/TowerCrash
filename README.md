@@ -17,4 +17,10 @@ Tower Crash Game made with Python and Panda3D
 >>>python towercrash.py
 ```
 
-### Controls:
+### How to play:
+* Dragging the mouse left and right on the game screen enables the camera to rotate.
+* Click on a block having the same color with a ball to delete the block.
+* A multi colored ball can delete all of the blocks having the same color with the clicked block.
+* A black and white ball can delete all of the blocks having the different color with the clicked block.
+* If the tower is successfully broken, you can try next tower.
+
