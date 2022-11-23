@@ -1,11 +1,11 @@
 import itertools
 import math
 import random
+from collections import UserList
 from enum import Enum, auto
 
 from panda3d.bullet import BulletCylinderShape, BulletBoxShape, BulletConvexHullShape
 from panda3d.bullet import BulletRigidBodyNode
-from direct.interval.IntervalGlobal import Sequence, Parallel, Func, Wait
 from panda3d.core import PandaNode, NodePath, TransformState
 from panda3d.core import Quat, Vec3, LColor, BitMask32, Point3
 
@@ -51,12 +51,13 @@ class Colors(int, Enum):
         return color.rgba if color.rgba else color.name
 
 
-class Blocks:
+class Blocks(UserList):
 
     def __init__(self, cols, rows):
         self.cols = cols
         self.rows = rows
-        self.data = [[None for _ in range(cols)] for _ in range(rows)]
+        data = [[None for _ in range(cols)] for _ in range(rows)]
+        super().__init__(data)
 
     def __iter__(self):
         for i, j in itertools.product(reversed(range(self.rows)), range(self.cols)):
@@ -68,22 +69,9 @@ class Blocks:
             if block:
                 yield block
 
-    def __getitem__(self, key):
-        r, c = key
-        return self.data[r][c]
-
     def __setitem__(self, key, value):
-        if isinstance(key, str):
-            r, c = self.get_index(key)
-        elif isinstance(key, tuple):
-            r, c = key
-        else:
-            raise TypeError()
-
+        r, c = self.get_index(key)
         self.data[r][c] = value
-
-    def __len__(self):
-        return len(self.data)
 
     def get_index(self, name):
         r = int(name) // self.cols
@@ -265,7 +253,7 @@ class TwinTower(RegisteredTower):
                 color, state = self.get_attrib(i)
                 cylinder = Cylinder(self, pt, str(i * self.blocks.cols + j), color, state, expand)
                 self.attach_block(state, cylinder)
-                self.blocks[i, j] = cylinder
+                self.blocks[i][j] = cylinder
 
 
 class ThinTower(RegisteredTower):
@@ -289,7 +277,7 @@ class ThinTower(RegisteredTower):
                 sx = 0.35 if i % 2 and j in {3, 6} else 0.7
                 rect = Rectangle(self, pos, str(i * self.blocks.cols + j), color, state, sx)
                 self.attach_block(state, rect)
-                self.blocks[i, j] = rect
+                self.blocks[i][j] = rect
 
 
 class CylinderTower(RegisteredTower):
@@ -325,7 +313,7 @@ class CylinderTower(RegisteredTower):
                 color, state = self.get_attrib(i)
                 cylinder = Cylinder(self, pt, str(i * self.blocks.cols + j), color, state)
                 self.attach_block(state, cylinder)
-                self.blocks[i, j] = cylinder
+                self.blocks[i][j] = cylinder
 
 
 class TripleTower(RegisteredTower):
@@ -361,7 +349,7 @@ class TripleTower(RegisteredTower):
                 triangle = TriangularPrism(
                     self, pt, str(i * self.blocks.cols + j), color, state, expand, reverse)
                 self.attach_block(state, triangle)
-                self.blocks[i, j] = triangle
+                self.blocks[i][j] = triangle
 
 
 class CubicTower(RegisteredTower):
@@ -392,7 +380,7 @@ class CubicTower(RegisteredTower):
                 pt = Point3(x * self.edge, y * self.edge, h) + self.center
                 cube = Cube(self, pt, str(i * self.blocks.cols + j), color, state, scale, heading)
                 self.attach_block(state, cube)
-                self.blocks[i, j] = cube
+                self.blocks[i][j] = cube
 
 
 class HShapedTower(RegisteredTower):
@@ -422,7 +410,7 @@ class HShapedTower(RegisteredTower):
                 pos = Point3(x * self.edge, y * self.edge, h) + self.center
                 rect = Rectangle(self, pos, str(i * self.blocks.cols + j), color, state, sx, heading)
                 self.attach_block(state, rect)
-                self.blocks[i, j] = rect
+                self.blocks[i][j] = rect
 
 
 class CrossTower(RegisteredTower):
@@ -451,7 +439,7 @@ class CrossTower(RegisteredTower):
                 pt = Point3(x * self.edge, y * self.edge, h) + self.center
                 cube = Cube(self, pt, str(i * self.blocks.cols + j), color, state, scale, heading)
                 self.attach_block(state, cube)
-                self.blocks[i, j] = cube
+                self.blocks[i][j] = cube
 
 
 class Cylinder(NodePath):
