@@ -1,16 +1,17 @@
+import sys
 from enum import Enum, auto
 
 from direct.gui.DirectGui import OnscreenText, Plain, OnscreenImage, DirectButton
 from direct.interval.IntervalGlobal import Sequence, Parallel, Func, Wait
 from direct.showbase.ShowBaseGlobal import globalClock
 from direct.showbase.ShowBase import ShowBase
-from panda3d.bullet import BulletSphereShape
+# from panda3d.bullet import BulletSphereShape
 from panda3d.bullet import BulletWorld, BulletDebugNode
 from panda3d.core import PandaNode, NodePath, TextNode, TransparencyAttrib
 from panda3d.core import Vec3, LColor, BitMask32, Point3, Quat
-from panda3d.core import AmbientLight, DirectionalLight
 
 from bubble import Bubbles
+from lights import BasicAmbientLight, BasicDayLight
 from scene import Scene
 from tower import towers, Colors, Block
 
@@ -193,31 +194,37 @@ class TowerCrash(ShowBase):
 
     def __init__(self):
         super().__init__()
-        self.disableMouse()
+        self.disable_mouse()
         self.camera_lowest_z = 2.5
         self.tower_num = 0
 
         self.world = BulletWorld()
-        self.world.setGravity(Vec3(0, 0, -9.81))
+        self.world.set_gravity(Vec3(0, 0, -9.81))
 
-        self.setup_lights()
-        self.scene = Scene()
-        self.scene.setup(self.world)
+        self.ambient_light = BasicAmbientLight()
+        self.directional_light = BasicDayLight()
+        self.scene = Scene(self.world)
+
         self.bubbles = Bubbles()
         self.ball = ColorBall(self.bubbles)
         self.gameover_seq = Sequence(Wait(3))
         self.start_screen = StartScreen(self)
         self.initialize_game()
 
-        # *******************************************
-        # collide_debug = self.render.attachNewNode(BulletDebugNode('debug'))
-        # self.world.setDebugNode(collide_debug.node())
-        # collide_debug.show()
-        # *******************************************
+        self.debug = self.render.attach_new_node(BulletDebugNode('debug'))
+        self.world.set_debug_node(self.debug.node())
 
+        self.accept('escape', sys.exit)
+        self.accept('d', self.toggle_debug)
         self.accept('mouse1', self.mouse_click)
         self.accept('mouse1-up', self.mouse_release)
         self.taskMgr.add(self.update, 'update')
+
+    def toggle_debug(self):
+        if self.debug.is_hidden():
+            self.debug.show()
+        else:
+            self.debug.hide()
 
     def initialize_game(self):
         self.start_screen.reparentTo(self.aspect2d)
@@ -227,8 +234,8 @@ class TowerCrash(ShowBase):
         self.timer = 0
         self.click = False
 
-        tower = towers[self.tower_num]
-        # tower = towers[6]
+        # tower = towers[self.tower_num]
+        tower = towers[4]
         self.tower = tower(24, self.scene.foundation, self.world)
         self.tower.build()
         self.ball.initialize(self.tower)
@@ -238,55 +245,41 @@ class TowerCrash(ShowBase):
 
         self.moveup = 360
         self.camera_highest_z = (self.tower.inactive_top + 1) * self.tower.block_h
-        self.camera.setPos(10, -40, self.camera_lowest_z)  # 10, -40, 2.5
+        self.camera.set_pos(10, -40, self.camera_lowest_z)  # 10, -40, 2.5
         # self.camera.setPos(10, -40, 30)
-        self.camera.setP(10)
-        self.camera.lookAt(-2, 12, self.camera_lowest_z + 4 * 2.5)
+        self.camera.set_p(10)
+        self.camera.look_at(-2, 12, self.camera_lowest_z + 4 * 2.5)
 
     def moveup_camera(self):
         if self.moveup:
             pos = self.tower.rotate(self.camera, 2)
-            z = self.camera.getZ() + self.camera_highest_z / 180
+            z = self.camera.get_z() + self.camera_highest_z / 180
             pos.z = z
-            self.camera.setPos(pos)
-            self.camera.lookAt(-2, 12, z + 4 * 2.5)
+            self.camera.set_pos(pos)
+            self.camera.look_at(-2, 12, z + 4 * 2.5)
             self.moveup -= 2
             return True
         return False
 
-    def setup_lights(self):
-        ambient_light = self.render.attachNewNode(AmbientLight('ambientLight'))
-        ambient_light.node().setColor(LColor(0.6, 0.6, 0.6, 1))
-        self.render.setLight(ambient_light)
-
-        directional_light = self.render.attachNewNode(DirectionalLight('directionalLight'))
-        directional_light.node().getLens().setFilmSize(200, 200)
-        directional_light.node().getLens().setNearFar(1, 100)
-        directional_light.node().setColor(LColor(1, 1, 1, 1))
-        directional_light.setPosHpr(Point3(0, 0, 30), Vec3(-30, -45, 0))
-        directional_light.node().setShadowCaster(True)
-        self.render.setShaderAuto()
-        self.render.setLight(directional_light)
-
     def control_mouse(self):
-        if self.mouseWatcherNode.hasMouse():
-            mouse_pos = self.mouseWatcherNode.getMouse()
+        if self.mouseWatcherNode.has_mouse():
+            mouse_pos = self.mouseWatcherNode.get_mouse()
             near_pos = Point3()
             far_pos = Point3()
             self.camLens.extrude(mouse_pos, near_pos, far_pos)
-            from_pos = self.render.getRelativePoint(self.camera, near_pos)
-            to_pos = self.render.getRelativePoint(self.camera, far_pos)
-            result = self.world.rayTestClosest(from_pos, to_pos, BitMask32.bit(1))
+            from_pos = self.render.get_relative_point(self.camera, near_pos)
+            to_pos = self.render.get_relative_point(self.camera, far_pos)
+            result = self.world.ray_test_closest(from_pos, to_pos, BitMask32.bit(1))
 
             if result.hasHit():
-                node_name = result.getNode().getName()
-                clicked_pos = result.getHitPos()
+                node_name = result.get_node().get_name()
+                clicked_pos = result.get_hit_pos()
 
                 if (block := self.tower.blocks.find(node_name)).state == Block.ACTIVE:
                     return clicked_pos, block
             else:
                 self.mouse_x = 0
-                self.mouse_dragging = globalClock.getFrameCount() + WAIT_COUNT
+                self.mouse_dragging = globalClock.get_frame_count() + WAIT_COUNT
         return None
 
     def mouse_click(self):
@@ -296,8 +289,8 @@ class TowerCrash(ShowBase):
         self.mouse_dragging = 0
 
     def control_rotation(self, dt):
-        mouse_x = self.mouseWatcherNode.getMouseX()
-        if globalClock.getFrameCount() >= self.mouse_dragging:
+        mouse_x = self.mouseWatcherNode.get_mouse_x()
+        if globalClock.get_frame_count() >= self.mouse_dragging:
             angle = 0
             if (delta := mouse_x - self.mouse_x) < 0:
                 angle += 90
@@ -306,17 +299,17 @@ class TowerCrash(ShowBase):
             angle *= dt
 
             rotated_pos = self.tower.rotate(self.camera, angle)
-            self.camera.setPos(rotated_pos)
-            self.camera.setH(self.camera.getH() + angle)
+            self.camera.set_pos(rotated_pos)
+            self.camera.set_h(self.camera.get_h() + angle)
             self.ball.reposition(rotation_angle=angle)
 
         self.mouse_x = mouse_x
 
     def control_descent(self, dt):
-        if self.camera.getZ() > self.camera_lowest_z:
+        if self.camera.get_z() > self.camera_lowest_z:
             distance = 10 * dt
 
-            self.camera.setZ(self.camera.getZ() - distance)
+            self.camera.set_z(self.camera.get_z() - distance)
             self.descent_distance -= distance
             self.ball.reposition(vertical_distance=distance)
 
@@ -348,7 +341,7 @@ class TowerCrash(ShowBase):
             self.state = Game.GAMEOVER
 
         if self.state == Game.GAMEOVER:
-            if not self.gameover_seq.isPlaying():
+            if not self.gameover_seq.is_playing():
                 self.game_over()
 
         if self.state == Game.PLAY:
@@ -360,8 +353,8 @@ class TowerCrash(ShowBase):
             if self.tower.tower_top <= 0 or self.ball.cnt == 0:
                 self.state = Game.CLEAR
 
-            self.tower.floating(self.world.contactTest(self.scene.surface.node()))
-            self.tower.sink(self.world.contactTest(self.scene.bottom.node()))
+            self.tower.floating(self.world.contact_test(self.scene.surface.node()))
+            self.tower.sink(self.world.contact_test(self.scene.bottom.node()))
 
             activated_rows = 0
             if task.time >= self.timer:
@@ -379,7 +372,7 @@ class TowerCrash(ShowBase):
                 n = 7 if not self.ball.used else 6
                 self.ball.setup(Colors.select(n), self.camera)
 
-        self.world.doPhysics(dt)
+        self.world.do_physics(dt)
         return task.cont
 
 
