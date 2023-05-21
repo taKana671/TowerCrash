@@ -10,6 +10,9 @@ from panda3d.bullet import BulletWorld, BulletDebugNode
 from panda3d.core import PandaNode, NodePath, TextNode, TransparencyAttrib
 from panda3d.core import Vec3, LColor, BitMask32, Point3, Quat
 
+from direct.showbase.InputStateGlobal import inputState
+
+
 from bubble import Bubbles
 from lights import BasicAmbientLight, BasicDayLight
 from scene import Scene
@@ -44,7 +47,9 @@ class ColorBall(NodePath):
     def __init__(self, bubbles):
         super().__init__(PandaNode('ball'))
         self.reparentTo(base.render)
-        self.start_pos = Point3(5.5, -21, 0)
+        # self.start_pos = Point3(5.5, -21, 0)
+        self.start_pos = Point3(0, -21, 0)
+
         self.start_hpr = Vec3(95, 0, 30)
         self.normal_ball = NormalBall(bubbles)
         self.multi_ball = MultiColorBall(bubbles)
@@ -214,11 +219,72 @@ class TowerCrash(ShowBase):
         self.debug = self.render.attach_new_node(BulletDebugNode('debug'))
         self.world.set_debug_node(self.debug.node())
 
+        # self.camera.set_p(-5)
+
+        self.accept('z', self.test_move_camera, ['z', 'up'])
+        self.accept('shift-z', self.test_move_camera, ['z', 'down'])
+        self.accept('x', self.test_move_camera, ['x', 'up'])
+        self.accept('shift-x', self.test_move_camera, ['x', 'down'])
+        self.accept('y', self.test_move_camera, ['y', 'up'])
+        self.accept('shift-y', self.test_move_camera, ['y', 'down'])
+        self.accept('h', self.test_move_camera, ['h', 'up'])
+        self.accept('shift-h', self.test_move_camera, ['h', 'down'])
+        self.accept('p', self.test_move_camera, ['p', 'up'])
+        self.accept('shift-p', self.test_move_camera, ['p', 'down'])
+        self.accept('r', self.test_move_camera, ['r', 'up'])
+        self.accept('shift-r', self.test_move_camera, ['r', 'down'])
+
         self.accept('escape', sys.exit)
         self.accept('d', self.toggle_debug)
         self.accept('mouse1', self.mouse_click)
         self.accept('mouse1-up', self.mouse_release)
         self.taskMgr.add(self.update, 'update')
+
+    def test_move_camera(self, direction, move):
+        if direction == 'z':
+            z = self.camera.get_z()
+            if move == 'up':
+                self.camera.set_z(z + 2)
+            elif move == 'down':
+                self.camera.set_z(z - 2)
+
+        if direction == 'y':
+            y = self.camera.get_y()
+            if move == 'up':
+                self.camera.set_y(y + 2)
+            elif move == 'down':
+                self.camera.set_y(y - 2)
+
+        if direction == 'x':
+            x = self.camera.get_x()
+            if move == 'up':
+                self.camera.set_x(x + 2)
+            elif move == 'down':
+                self.camera.set_x(x - 2)
+
+        if direction == 'h':
+            h = self.camera.get_h()
+            if move == 'up':
+                self.camera.set_h(h + 2)
+            elif move == 'down':
+                self.camera.set_h(h - 2)
+
+        if direction == 'p':
+            p = self.camera.get_p()
+            if move == 'up':
+                self.camera.set_p(p + 2)
+            elif move == 'down':
+                self.camera.set_p(p - 2)
+
+        if direction == 'r':
+            r = self.camera.get_r()
+            if move == 'up':
+                self.camera.set_r(r + 2)
+            elif move == 'down':
+                self.camera.set_r(r - 2)
+
+        # self.camera.look_at(-2, 12, 12.5)
+        print(self.camera.get_pos(), self.camera.get_hpr())
 
     def toggle_debug(self):
         if self.debug.is_hidden():
@@ -234,9 +300,10 @@ class TowerCrash(ShowBase):
         self.timer = 0
         self.click = False
 
-        # tower = towers[self.tower_num]
-        tower = towers[4]
+        tower = towers[self.tower_num]
+        # tower = towers[4]
         self.tower = tower(24, self.scene.foundation, self.world)
+        # self.tower = tower(6, self.scene.foundation, self.world)
         self.tower.build()
         self.ball.initialize(self.tower)
 
@@ -244,8 +311,10 @@ class TowerCrash(ShowBase):
             self.gameover_seq.pop()
 
         self.moveup = 360
-        self.camera_highest_z = (self.tower.inactive_top + 1) * self.tower.block_h
-        self.camera.set_pos(10, -40, self.camera_lowest_z)  # 10, -40, 2.5
+        # self.camera_highest_z = (self.tower.inactive_top + 1) * self.tower.block_h
+        self.camera_highest_z = (self.tower.inactive_top + 1) * 2.45
+        # self.camera.set_pos(10, -40, self.camera_lowest_z)  # 10, -40, 2.5
+        self.camera.set_pos(0, -64, self.camera_lowest_z)
         # self.camera.setPos(10, -40, 30)
         self.camera.set_p(10)
         self.camera.look_at(-2, 12, self.camera_lowest_z + 4 * 2.5)
@@ -256,6 +325,8 @@ class TowerCrash(ShowBase):
             z = self.camera.get_z() + self.camera_highest_z / 180
             pos.z = z
             self.camera.set_pos(pos)
+
+            # self.camera.look_at(-2, 12, 12.5)
             self.camera.look_at(-2, 12, z + 4 * 2.5)
             self.moveup -= 2
             return True
@@ -275,7 +346,13 @@ class TowerCrash(ShowBase):
                 node_name = result.get_node().get_name()
                 clicked_pos = result.get_hit_pos()
 
-                if (block := self.tower.blocks.find(node_name)).state == Block.ACTIVE:
+                # *****************************************
+                # block = self.tower.blocks.find(node_name)
+                # print(block.node().is_active(), block.node().is_static())
+                # *****************************************
+
+                # if (block := self.tower.blocks.find(node_name)).state == Block.ACTIVE:
+                if (block := self.tower.blocks.find(node_name)).node().is_active():
                     return clicked_pos, block
             else:
                 self.mouse_x = 0
@@ -307,11 +384,16 @@ class TowerCrash(ShowBase):
 
     def control_descent(self, dt):
         if self.camera.get_z() > self.camera_lowest_z:
-            distance = 10 * dt
+            # distance = 10 * dt
+            distance = 50 * dt
 
             self.camera.set_z(self.camera.get_z() - distance)
             self.descent_distance -= distance
             self.ball.reposition(vertical_distance=distance)
+
+        # # ****************************************
+        # if self.camera.get_z() <= 12.5:
+        #     self.camera.look_at(-2, 12, 12.5)
 
     def clear(self):
         if self.tower.tower_top <= 0:
@@ -330,6 +412,7 @@ class TowerCrash(ShowBase):
 
     def update(self, task):
         dt = globalClock.getDt()
+        self.scene.water_camera.setMat(self.cam.getMat(self.render) * self.scene.clip_plane.getReflectionMat())
 
         if self.state == Game.START:
             if not self.moveup_camera():
@@ -353,12 +436,12 @@ class TowerCrash(ShowBase):
             if self.tower.tower_top <= 0 or self.ball.cnt == 0:
                 self.state = Game.CLEAR
 
-            self.tower.floating(self.world.contact_test(self.scene.surface.node()))
+            # self.tower.floating(self.world.contact_test(self.scene.surface.node()))
             self.tower.sink(self.world.contact_test(self.scene.bottom.node()))
 
             activated_rows = 0
             if task.time >= self.timer:
-                activated_rows = self.tower.activate()
+                activated_rows = self.tower.update()
                 self.timer = task.time + CHECK_REPEAT
 
             self.descent_distance += activated_rows * self.tower.block_h
