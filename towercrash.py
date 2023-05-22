@@ -214,10 +214,15 @@ class TowerCrash(ShowBase):
         self.ball = ColorBall(self.bubbles)
         self.gameover_seq = Sequence(Wait(3))
         self.start_screen = StartScreen(self)
-        self.initialize_game()
 
         self.debug = self.render.attach_new_node(BulletDebugNode('debug'))
         self.world.set_debug_node(self.debug.node())
+
+        self.navigator = NodePath('floater')
+        self.navigator.reparent_to(self.render)
+        self.camera.reparent_to(self.navigator)
+
+        self.initialize_game()
 
         # self.camera.set_p(-5)
 
@@ -310,24 +315,32 @@ class TowerCrash(ShowBase):
         for _ in range(len(self.gameover_seq) - 1):
             self.gameover_seq.pop()
 
+        # self.camera.look_at(self.floater)
+
         self.moveup = 360
         # self.camera_highest_z = (self.tower.inactive_top + 1) * self.tower.block_h
-        self.camera_highest_z = (self.tower.inactive_top + 1) * 2.45
+        self.camera_highest_z = (self.tower.inactive_top + 1) * 3.14  #2.45
         # self.camera.set_pos(10, -40, self.camera_lowest_z)  # 10, -40, 2.5
         self.camera.set_pos(0, -64, self.camera_lowest_z)
         # self.camera.setPos(10, -40, 30)
-        self.camera.set_p(10)
-        self.camera.look_at(-2, 12, self.camera_lowest_z + 4 * 2.5)
+        # self.camera.set_p(10)
+        # self.camera.look_at(-2, 12, self.camera_lowest_z + 4 * 2.5)
+        self.camera.look_at(0, 0, self.camera_lowest_z + 4 * 2.5)
 
     def moveup_camera(self):
         if self.moveup:
-            pos = self.tower.rotate(self.camera, 2)
-            z = self.camera.get_z() + self.camera_highest_z / 180
-            pos.z = z
-            self.camera.set_pos(pos)
+            # pos = self.rotate(2)
+            self.navigator.set_h(self.navigator.get_h() + 2)
+            # pos = self.tower.rotate(self.camera, 2)
 
-            # self.camera.look_at(-2, 12, 12.5)
-            self.camera.look_at(-2, 12, z + 4 * 2.5)
+            # z = self.camera.get_z() + self.camera_highest_z / 180
+            z = self.camera.get_z() + self.tower.floater.get_z(self.render) / 180
+            self.camera.set_z(z)
+            # pos.z = z
+            # self.camera.set_pos(pos)
+
+            # self.camera.look_at(-2, 12, z + 4 * 2.5)
+            # self.camera.look_at(0, 0, z + 4 * 2.5)
             self.moveup -= 2
             return True
         return False
@@ -365,6 +378,15 @@ class TowerCrash(ShowBase):
     def mouse_release(self):
         self.mouse_dragging = 0
 
+    
+    def rotate(self, rotation_angle):
+        q = Quat()
+        axis = Vec3.up()
+        q.setFromAxisAngle(rotation_angle, axis.normalized())
+        r = q.xform(self.camera.getPos() - self.scene.foundation.get_pos(self.render))
+        rotated_pos = self.scene.foundation.get_pos(self.render) + r
+        return rotated_pos
+    
     def control_rotation(self, dt):
         mouse_x = self.mouseWatcherNode.get_mouse_x()
         if globalClock.get_frame_count() >= self.mouse_dragging:
@@ -375,18 +397,19 @@ class TowerCrash(ShowBase):
                 angle -= 90
             angle *= dt
 
-            rotated_pos = self.tower.rotate(self.camera, angle)
-            self.camera.set_pos(rotated_pos)
-            self.camera.set_h(self.camera.get_h() + angle)
+            # rotated_pos = self.tower.rotate(self.camera, angle)
+            # rotated_pos = self.rotate(angle)
+            # self.camera.setPos(rotated_pos)
+            # self.camera.setH(self.camera.getH() + angle)
+            self.navigator.set_h(self.navigator.get_h() + angle)
             self.ball.reposition(rotation_angle=angle)
 
         self.mouse_x = mouse_x
 
     def control_descent(self, dt):
         if self.camera.get_z() > self.camera_lowest_z:
-            # distance = 10 * dt
-            distance = 50 * dt
-
+            distance = 10 * dt
+           
             self.camera.set_z(self.camera.get_z() - distance)
             self.descent_distance -= distance
             self.ball.reposition(vertical_distance=distance)
@@ -439,12 +462,14 @@ class TowerCrash(ShowBase):
             # self.tower.floating(self.world.contact_test(self.scene.surface.node()))
             self.tower.sink(self.world.contact_test(self.scene.bottom.node()))
 
-            activated_rows = 0
-            if task.time >= self.timer:
-                activated_rows = self.tower.update()
-                self.timer = task.time + CHECK_REPEAT
+            # activated_rows = 0
+            # if task.time >= self.timer:
+            #     activated_rows = self.tower.update()
+            #     self.timer = task.time + CHECK_REPEAT
 
-            self.descent_distance += activated_rows * self.tower.block_h
+            activated_rows = self.tower.update()
+            # self.descent_distance += activated_rows * self.tower.block_h
+            self.descent_distance += activated_rows * 3.14
             if self.descent_distance > 0:
                 self.control_descent(dt)
 

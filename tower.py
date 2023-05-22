@@ -99,7 +99,7 @@ class Tower(NodePath):
         # pt = self.foundation.getPos()
         # pt.z = 1.0
         # self.center = pt  # Point3(-2, 12, 1.0)
-        
+
         self.center = Point3(0, 0, 10)
         self.tower_top = stories - 1
         self.inactive_top = stories - 9
@@ -123,7 +123,7 @@ class Tower(NodePath):
 
     def attach_block(self, block):
         self.world.attach(block.node())
-        # block must have mass(1) and after has attached to the world, change its mass to 0 
+        # block must have mass(1) and after has attached to the world, change its mass to 0
         block.node().set_mass(0)
         block.node().deactivation_enabled = True
 
@@ -138,8 +138,9 @@ class Tower(NodePath):
             (b for b in self.blocks if b.node().is_active()),
             # (b for b in self.blocks if b.state == Block.ACTIVE),
             key=lambda x: x.getZ())
-        tower_top_now = int(top_block.getZ() / self.block_h) - 1
-
+        # tower_top_now = int(top_block.getZ() / self.block_h) - 1
+        tower_top_now = int(top_block.get_name()) // self.blocks.cols
+        print('tower_top_now', tower_top_now)
         if (activate_rows := self.tower_top - tower_top_now) <= 0:
             return 0
 
@@ -147,11 +148,6 @@ class Tower(NodePath):
             for _ in range(activate_rows):
                 for block in self.blocks(self.inactive_top):
                     self.activate(block)
-                    # block.state = Block.ACTIVE
-                    # block.clearColor()
-                    # block.setColor(Colors.select())
-                    # block.node().deactivation_enabled = False
-                    # block.node().setMass(1)
                 self.inactive_top -= 1
         self.tower_top = tower_top_now
         return activate_rows
@@ -251,6 +247,10 @@ class TwinTower(RegisteredTower):
         self.r_even = [(rad, -ok), (-rad, -ok), (0, ok * 2)]
         self.r_odd = [(-rad, ok), (rad, ok), (0, -ok * 2)]
 
+        self.floater = NodePath('floater')
+        self.floater.set_pos(Point3(0, 0, self.inactive_top * self.block_h))
+        self.floater.reparent_to(self)
+
     def left_tower(self, even, h):
         if even:
             points = self.l_even
@@ -285,11 +285,13 @@ class TwinTower(RegisteredTower):
                 cylinder.set_pos(pt)
                 self.attach_block(cylinder)
                 self.blocks[i][j] = cylinder
-
+        # (Pdb) cylinder.get_pos(base.render)
+        # LPoint3f(5, -1.1547, 75.5) cylinder on teh top
         # make activate blocks in 8 rows from the top.
         for i in range(self.tower_top, self.inactive_top, -1):
             for cylinder in self.blocks(i):
                 self.activate(cylinder)
+
 
 
 # class ThinTower(RegisteredTower):
