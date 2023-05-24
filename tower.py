@@ -95,7 +95,8 @@ class Tower(NodePath):
         self.world = world
         self.blocks = blocks
         self.axis = Vec3.up()
-        # self.center = Point3(-2, 12, 1.0)
+        # self.center = Point3(-2, 124
+        #  , 1.0)
         # pt = self.foundation.getPos()
         # pt.z = 1.0
         # self.center = pt  # Point3(-2, 12, 1.0)
@@ -104,22 +105,22 @@ class Tower(NodePath):
         self.tower_top = stories - 1
         self.inactive_top = stories - 9
 
-    # def get_attrib(self, i):
-    #     # if i <= self.inactive_top:
-    #     #     return Colors.GRAY.rgba, Block.INACTIVE
-    #     # else:
-    #     #     return Colors.select(), Block.ACTIVE
-    #     return Colors.GRAY.rgba, Block.INACTIVE
+        self.floater = NodePath('floater')
+        self.floater.reparent_to(self)
+
+        self.blocks_nd = NodePath('blocks')
+        self.blocks_nd.reparent_to(self)
 
 
-    # def attach_block(self, state, block):
-    #     self.world.attachRigidBody(block.node())
 
-    #     if state == state.ACTIVE:
-    #         block.node().deactivation_enabled = False
-    #     else:
-    #         block.node().setMass(0)
-    #         block.node().deactivation_enabled = True
+    def build(self):
+        self.build_tower()
+
+        # make activate blocks in 8 rows from the top.
+        for i in range(self.tower_top, self.inactive_top, -1):
+            for block in self.blocks(i):
+                self.activate(block)
+                self.floater.set_z(block.get_z())
 
     def attach_block(self, block):
         self.world.attach(block.node())
@@ -133,31 +134,40 @@ class Tower(NodePath):
         block.node().deactivation_enabled = False
         block.node().setMass(1)
 
+    def find_blocks(self, row):
+        for i in range(7):
+            name = str(self.inactive_top * 7 + i)
+            if not (block := self.blocks_nd.find(name)).is_empty():
+                yield block
+
     def update(self):
         top_block = max(
             (b for b in self.blocks if b.node().is_active()),
-            # (b for b in self.blocks if b.state == Block.ACTIVE),
-            key=lambda x: x.getZ())
-        # tower_top_now = int(top_block.getZ() / self.block_h) - 1
-        tower_top_now = int(top_block.get_name()) // self.blocks.cols
-        print('tower_top_now', tower_top_now)
-        if (activate_rows := self.tower_top - tower_top_now) <= 0:
-            return 0
+            key=lambda x: x.get_z()
+        )
+        # top_row, _ = self.blocks.get_index(top_block.get_name())
+        top_row = int(top_block.get_z() / self.block_h) + 1
 
-        if self.inactive_top >= 0:
+        # print(top_row, self.inactive_top)
+        if (activate_rows := self.tower_top - top_row) > 0:
             for _ in range(activate_rows):
-                for block in self.blocks(self.inactive_top):
-                    self.activate(block)
-                self.inactive_top -= 1
-        self.tower_top = tower_top_now
-        return activate_rows
+                if self.inactive_top >= 0:
 
-    def rotate(self, obj, rotation_angle):
-        q = Quat()
-        q.setFromAxisAngle(rotation_angle, self.axis.normalized())
-        r = q.xform(obj.getPos() - self.center)
-        rotated_pos = self.center + r
-        return rotated_pos
+                    for block in self.find_blocks(self.inactive_top):
+                        self.activate(block)
+                    # for block in self.blocks(self.inactive_top):
+                    #     self.activate(block)
+                    self.inactive_top -= 1
+                    self.floater.set_z(self.floater.get_z() - self.block_h)
+
+            self.tower_top = top_row
+
+    # def rotate(self, obj, rotation_angle):
+    #     q = Quat()
+    #     q.setFromAxisAngle(rotation_angle, self.axis.normalized())
+    #     r = q.xform(obj.getPos() - self.center)
+    #     rotated_pos = self.center + r
+    #     return rotated_pos
 
     def clean_up(self, block):
         self.blocks[block.node().getName()] = None
@@ -214,7 +224,7 @@ class RegisteredTower(Tower):
 
     def __init_subclass__(cls):
         super().__init_subclass__()
-        if 'build' not in cls.__dict__:
+        if 'build_tower' not in cls.__dict__:
             raise NotImplementedError(
                 f"Subclasses should implement 'build'. {cls.__name__} has no build.")
         if 'level' not in cls.__dict__:
@@ -247,10 +257,6 @@ class TwinTower(RegisteredTower):
         self.r_even = [(rad, -ok), (-rad, -ok), (0, ok * 2)]
         self.r_odd = [(-rad, ok), (rad, ok), (0, -ok * 2)]
 
-        self.floater = NodePath('floater')
-        self.floater.set_pos(Point3(0, 0, self.inactive_top * self.block_h))
-        self.floater.reparent_to(self)
-
     def left_tower(self, even, h):
         if even:
             points = self.l_even
@@ -275,23 +281,40 @@ class TwinTower(RegisteredTower):
         yield from self.left_tower(even, h)
         yield from self.right_tower(even, h)
 
-    def build(self):
+    def build_tower(self):
         for i in range(self.blocks.rows):
             h = self.block_h * i
             for j, (pt, expand) in enumerate(self.block_position(i % 2 == 0, h)):
-                cylinder = self.cylinder_wide.copy_to(self) if expand else self.cylinder_slim.copy_to(self)
+                # cylinder = self.cylinder_wide.copy_to(self) if expand else self.cylinder_slim.copy_to(self)
+                cylinder = self.cylinder_wide.copy_to(self.blocks_nd) if expand else self.cylinder_slim.copy_to(self.blocks_nd)
                 cylinder.set_name(str(i * self.blocks.cols + j))
                 cylinder.set_color(Colors.GRAY.rgba)
                 cylinder.set_pos(pt)
                 self.attach_block(cylinder)
                 self.blocks[i][j] = cylinder
-        # (Pdb) cylinder.get_pos(base.render)
-        # LPoint3f(5, -1.1547, 75.5) cylinder on teh top
-        # make activate blocks in 8 rows from the top.
-        for i in range(self.tower_top, self.inactive_top, -1):
-            for cylinder in self.blocks(i):
-                self.activate(cylinder)
 
+
+# (Pdb) self.blocks[0][0]
+# render/scene/foundation/tower/0
+# (Pdb) first = self.blocks
+# (Pdb) first = self.blocks[0][0]
+# (Pdb) first.get_pos()
+# LPoint3f(-0.3, 0.05, 0)
+# (Pdb) top = self.blocks[23][3]
+# (Pdb) top
+# render/scene/foundation/tower/164
+# (Pdb) top.get_pos()
+# LPoint3f(0.25, -0.057735, 3.45)
+# (Pdb) 3.45 / 23
+# 0.15
+# (Pdb) top.get_pos(base.render)
+# LPoint3f(5, -1.1547, 75.5)
+# (Pdb) first.get_pos(base.render)
+# LPoint3f(-6, 1, 6.5)
+# (Pdb) 75.5 - 6.5
+# 69.0
+# (Pdb) 69 / 23
+# 3.0
 
 
 # class ThinTower(RegisteredTower):

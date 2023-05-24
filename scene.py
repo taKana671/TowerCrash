@@ -127,7 +127,7 @@ class Scene(NodePath):
         self.create_water()
         # self.create_fog()
 
-        self.reparent_to(base.render)
+        # self.reparent_to(base.render)
 
     def create_fog(self):
         fog = Fog("fog")
