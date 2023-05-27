@@ -1,8 +1,7 @@
 import itertools
 import math
 import random
-from collections import UserList
-from enum import Enum, auto
+from enum import Enum
 
 from panda3d.bullet import BulletCylinderShape, BulletBoxShape, BulletConvexHullShape
 from panda3d.bullet import BulletRigidBodyNode
@@ -11,21 +10,12 @@ from panda3d.core import Quat, Vec3, LColor, BitMask32, Point3
 
 from create_geomnode import Cylinder
 
-
 PATH_CYLINDER = "models/cylinder/cylinder"
 PATH_CUBE = 'models/cube/cube'
 PATH_TRIANGLE = 'models/trianglular-prism/trianglular-prism'
 
 
 towers = []
-
-
-class Block(Enum):
-
-    ACTIVE = auto()
-    INACTIVE = auto()
-    # INWATER = auto()
-    # DELETE = auto()
 
 
 class Colors(int, Enum):
@@ -53,170 +43,100 @@ class Colors(int, Enum):
         return color.rgba if color.rgba else color.name
 
 
-class Blocks(UserList):
-
-    def __init__(self, cols, rows):
-        self.cols = cols
-        self.rows = rows
-        data = [[None for _ in range(cols)] for _ in range(rows)]
-        super().__init__(data)
-
-    def __iter__(self):
-        for i, j in itertools.product(reversed(range(self.rows)), range(self.cols)):
-            if self.data[i][j]:
-                yield self.data[i][j]
-
-    def __call__(self, i):
-        for block in self.data[i]:
-            if block:
-                yield block
-
-    def __setitem__(self, key, value):
-        r, c = self.get_index(key)
-        self.data[r][c] = value
-
-    def get_index(self, name):
-        r = int(name) // self.cols
-        c = int(name) % self.cols
-        return r, c
-
-    def find(self, node_name):
-        r, c = self.get_index(node_name)
-        return self.data[r][c]
-
-
 class Tower(NodePath):
 
-    def __init__(self, world, stories, foundation, blocks):
+    def __init__(self, world, rows, columns, foundation):
         super().__init__(PandaNode('tower'))
-        # self.reparentTo(base.render)
+        self.rows = rows
+        self.cols = columns
         self.foundation = foundation
-        self.reparent_to(self.foundation)
         self.world = world
-        self.blocks = blocks
-        self.axis = Vec3.up()
-        # self.center = Point3(-2, 124
-        #  , 1.0)
-        # pt = self.foundation.getPos()
-        # pt.z = 1.0
-        # self.center = pt  # Point3(-2, 12, 1.0)
-
-        self.center = Point3(0, 0, 10)
-        self.tower_top = stories - 1
-        self.inactive_top = stories - 9
+        # self.center = Point3(0, 0, 10)
+        self.tower_top = self.rows - 1
+        self.inactive_top = self.rows - 9
 
         self.floater = NodePath('floater')
         self.floater.reparent_to(self)
+        self.blocks = NodePath('blocks')
+        self.blocks.reparent_to(self)
 
-        self.blocks_nd = NodePath('blocks')
-        self.blocks_nd.reparent_to(self)
-
-
+        self.reparent_to(self.foundation)
 
     def build(self):
         self.build_tower()
-
-        # make activate blocks in 8 rows from the top.
-        for i in range(self.tower_top, self.inactive_top, -1):
-            for block in self.blocks(i):
+        # Activate blocks in 8 rows from the top.
+        for r in range(self.tower_top, self.inactive_top, -1):
+            for block in self.find_blocks(r):
                 self.activate(block)
                 self.floater.set_z(block.get_z())
 
     def attach_block(self, block):
         self.world.attach(block.node())
-        # block must have mass(1) and after has attached to the world, change its mass to 0
         block.node().set_mass(0)
         block.node().deactivation_enabled = True
 
     def activate(self, block):
-        block.clearColor()
-        block.setColor(Colors.select())
+        block.clear_color()
+        block.set_color(Colors.select())
         block.node().deactivation_enabled = False
-        block.node().setMass(1)
+        block.node().set_mass(1)
 
     def find_blocks(self, row):
-        for i in range(7):
-            name = str(self.inactive_top * 7 + i)
-            if not (block := self.blocks_nd.find(name)).is_empty():
+        for i in range(self.cols):
+            name = str(row * 7 + i)
+            if not (block := self.blocks.find(name)).is_empty():
                 yield block
 
     def update(self):
         top_block = max(
-            (b for b in self.blocks if b.node().is_active()),
+            (b for b in self.blocks.get_children() if b.node().is_active()),
             key=lambda x: x.get_z()
         )
-        # top_row, _ = self.blocks.get_index(top_block.get_name())
         top_row = int(top_block.get_z() / self.block_h) + 1
 
-        # print(top_row, self.inactive_top)
         if (activate_rows := self.tower_top - top_row) > 0:
             for _ in range(activate_rows):
                 if self.inactive_top >= 0:
-
                     for block in self.find_blocks(self.inactive_top):
                         self.activate(block)
-                    # for block in self.blocks(self.inactive_top):
-                    #     self.activate(block)
                     self.inactive_top -= 1
                     self.floater.set_z(self.floater.get_z() - self.block_h)
 
             self.tower_top = top_row
 
-    # def rotate(self, obj, rotation_angle):
-    #     q = Quat()
-    #     q.setFromAxisAngle(rotation_angle, self.axis.normalized())
-    #     r = q.xform(obj.getPos() - self.center)
-    #     rotated_pos = self.center + r
-    #     return rotated_pos
-
     def clean_up(self, block):
-        self.blocks[block.node().getName()] = None
+        """block (NodePath)
+        """
         self.world.remove(block.node())
-        block.removeNode()
-
-    # def floating(self, result):
-    #     for name in set(con.getNode0().getName() for con in result.getContacts()):
-    #         block = self.blocks.find(name)
-    #         if block.state != Block.INWATER:
-    #             block.state = Block.INWATER
-    #             block.node().deactivation_enabled = True
-
-    def sink(self, result):
-        for name in set(con.getNode0().getName() for con in result.getContacts()):
-            block = self.blocks.find(name)
-            self.clean_up(block)
+        block.remove_node()
 
     def get_neighbors(self, block, color, blocks):
-        # block.state = Block.DELETE
         blocks.append(block)
-        result = self.world.contactTest(block.node())
 
-        for name in set(con.getNode1().getName() for con in result.getContacts()):
-            if name != self.foundation.name:
-                neighbor = self.blocks.find(name)
-                if neighbor not in blocks and neighbor.getColor() == color:
+        for con in self.world.contact_test(block.node()).get_contacts():
+            if (neighbor_nd := con.get_node1()) != self.foundation.node():
+                neighbor = NodePath(neighbor_nd)
+                if neighbor not in blocks and neighbor.get_color() == color:
                     self.get_neighbors(neighbor, color, blocks)
 
     def judge_colors(self, judge_color):
         """Args:
                 judge_color: lambda
         """
-        for block in self.blocks:
-            # if block.state == Block.ACTIVE and judge_color(block):
+        for block in self.blocks.get_children():
             if block.node().is_active() and judge_color(block):
-                # block.state = Block.DELETE
                 yield block
 
-    def remove_blocks(self):
-        for block in self.blocks:
+    def remove_all_blocks(self):
+        for block in self.blocks.get_children():
             self.clean_up(block)
 
     def clear_foundation(self, bubbles):
-        result = self.world.contactTest(self.foundation.node())
+        result = self.world.contact_test(self.foundation.node())
 
-        for name in set(con.getNode1().getName() for con in result.getContacts()):
-            block = self.blocks.find(name)
-            bubbles.get_sequence(block.getColor(), block.getPos()).start()
+        for con in result.get_contacts():
+            block = NodePath(con.get_node1())
+            bubbles.get_sequence(block.get_color(), block.get_pos()).start()
             self.clean_up(block)
 
 
@@ -239,8 +159,7 @@ class TwinTower(RegisteredTower):
     level = 20
 
     def __init__(self, stories, foundation, world):
-        super().__init__(world, stories, foundation, Blocks(7, stories))
-        self.set_pos(Vec3(0, 0, 1.075))
+        super().__init__(world, stories, 7, foundation)
         self.cylinder_slim = CylinderBlock('cylinder_slim', Vec3(0.1, 0.1, 0.15))
         self.cylinder_wide = CylinderBlock('cylinder_wide', Vec3(0.25, 0.25, 0.15))
 
@@ -256,6 +175,8 @@ class TwinTower(RegisteredTower):
         self.r_center = Point3(0.25, 0, 0)
         self.r_even = [(rad, -ok), (-rad, -ok), (0, ok * 2)]
         self.r_odd = [(-rad, ok), (rad, ok), (0, -ok * 2)]
+
+        self.set_pos(Vec3(0, 0, 1.075))
 
     def left_tower(self, even, h):
         if even:
@@ -282,17 +203,15 @@ class TwinTower(RegisteredTower):
         yield from self.right_tower(even, h)
 
     def build_tower(self):
-        for i in range(self.blocks.rows):
+        # After a block has attached to the world, change its mass to 0.
+        for i in range(self.rows):
             h = self.block_h * i
             for j, (pt, expand) in enumerate(self.block_position(i % 2 == 0, h)):
-                # cylinder = self.cylinder_wide.copy_to(self) if expand else self.cylinder_slim.copy_to(self)
-                cylinder = self.cylinder_wide.copy_to(self.blocks_nd) if expand else self.cylinder_slim.copy_to(self.blocks_nd)
-                cylinder.set_name(str(i * self.blocks.cols + j))
+                cylinder = self.cylinder_wide.copy_to(self.blocks) if expand else self.cylinder_slim.copy_to(self.blocks)
+                cylinder.set_name(str(i * self.cols + j))
                 cylinder.set_color(Colors.GRAY.rgba)
                 cylinder.set_pos(pt)
                 self.attach_block(cylinder)
-                self.blocks[i][j] = cylinder
-
 
 # (Pdb) self.blocks[0][0]
 # render/scene/foundation/tower/0
@@ -536,35 +455,6 @@ class CylinderBlock(NodePath):
         self.node().setMass(1)
         self.set_scale(scale)
         self.cylinder.reparent_to(self)
-
-
-class CylinderBlock1(NodePath):
-
-    def __init__(self, model, pos, name, color, state, expand=False):
-        super().__init__(BulletRigidBodyNode(name))
-        # self.reparentTo(root)
-        self.cylinder = model.copy_to(self)
-        self.cylinder.set_transform(TransformState.make_pos(Vec3(0, 0, -0.5)))
-        # cylinder = base.loader.loadModel(PATH_CYLINDER)
-        # cylinder = Cylinder()
-        end, tip = self.cylinder.getTightBounds()
-        self.node().addShape(BulletCylinderShape((tip - end) / 2))
-
-        # shape = BulletConvexHullShape()
-        # shape.add_geom(cylinder.node().get_geom(0))
-        # self.node().add_shape(shape)
-
-        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(4))
-        self.node().setMass(1)
-        # self.setScale(0.1, 0.1, 0.15)
-        if expand:
-            self.setScale(Vec3(0.25, 0.25, 0.15))
-        else:
-            self.setScale(Vec3(0.1, 0.1, 0.15))
-        self.setColor(color)
-        self.setPos(pos)
-        self.state = state
-        # cylinder.reparentTo(self)
 
 
 class Rectangle(NodePath):
