@@ -1,3 +1,4 @@
+import math
 from enum import Enum, auto
 
 import numpy as np
@@ -8,7 +9,10 @@ from panda3d.core import Vec3, LColor, BitMask32, Point3, Quat
 from panda3d.bullet import BulletRigidBodyNode, BulletSphereShape
 
 
-PATH_SPHERE = "models/sphere/sphere"
+from create_geomnode import Sphere
+
+
+# PATH_SPHERE = "models/sphere/sphere"
 PATH_TEXTURE_MULTI = 'textures/multi.jpg'
 PATH_TEXTURE_TWOTONE = 'textures/two_tone.jpg'
 PATH_START_SCREEN = 'images/start.png'
@@ -24,60 +28,71 @@ class Ball(Enum):
     MOVING = auto()
 
 
-class ColorBall(NodePath):
+class ColorBall:
 
-    def __init__(self, name, bubbles):
-        super().__init__(BulletRigidBodyNode(name))
-        self.ball = base.loader.loadModel(PATH_SPHERE)
-        self.ball.reparent_to(self)
-        end, tip = self.ball.get_tight_bounds()
-        size = tip - end
-        self.node().add_shape(BulletSphereShape(size.z / 2))
-        self.setCollideMask(BitMask32.bit(3))
-        self.setScale(0.2)
-        self.node().set_kinematic(True)
-
+    def __init__(self, world, navigator, bubbles):
         # self.start_pos = Point3(0, -21, 0)
         self.start_pos = Point3(0, -60, 0)  # -50
 
         self.bubbles = bubbles
         self.start_hpr = Vec3(95, 0, 30)
-        self.normal_ball = NormalBall(bubbles)
-        self.multi_ball = MultiColorBall(bubbles)
-        self.twotone_ball = TwoToneBall(bubbles)
-        self.ball = None
-
+        self.state = None
         self.move_idx = 0
+        self.world = world
+        self.navigator = navigator
+
+        self.normal_ball = NormalBall(self.bubbles)
+        self.world.attach(self.normal_ball.node())
+
+        self.multi_ball = MultiColorBall(self.bubbles)
+        self.world.attach(self.multi_ball.node())
+
+        self.twotone_ball = TwoToneBall(self.bubbles)
+        self.world.attach(self.twotone_ball.node())
 
     def initialize(self, tower):
         self.tower = tower
-        self.cnt = self.tower.level
+
         if self.ball is not None and self.ball.hasParent():
             self._delete()
         self.used = False
+        self.state = None
         self.state = None
         self.pos = self.start_pos
         self.hpr = self.start_hpr
         # self.ball_number.setText('')
 
+    def setup(self, color):
+        if color == 'MULTI':
+            self.ball = self.multi_ball
+        elif color == 'TWOTONE':
+            self.used = True
+            self.ball = self.twotone_ball
+        else:
+            self.ball = self.normal_ball
+            self.ball.setColor(color)
+
+        self.ball.set_pos(self.start_pos)
+        self.ball.reparentTo(self.navigator)
+
+        self.state = Ball.READY
+
     def _delete(self):
         self.detachNode()
         self.state = Ball.DELETED
 
-    def move(self, clicked_pos, block):
-        self.cnt -= 1
+    def move(self, clicked_pt, block):
         self.state = Ball.MOVE
-        self.ball_number.detachNode()
 
-        # rel_pos = block.get_pos(base.render)
-        # relative_pos = base.render.get_relative_point(self.tower, clicked_pos)
-        # vec = base.render.get_relative_point(self.navigator, clicked_pos)
-        # diff = vec - clicked_pos
-        # clicked_pos = clicked_pos + diff
-        rel_pos = self.navigator.get_relative_point(base.render, clicked_pos)
+        start_pt = self.ball.get_pos()
+        end_pt = self.navigator.get_relative_point(base.render, clicked_pt)
+        mid = (start_pt + end_pt) / 2
+        mid.z += 10
+        self.control_pts = [start_pt, mid, end_pt]
+        self.total_dt = 0 
         
         # self.arr = self.bezier_curve2(self.ball.get_pos(), rel_pos)
-        self.px, self.py, self.pz = self.bezier_curve2(self.ball.get_pos(), rel_pos)
+        # self.px, self.py, self.pz = self.bezier_curve2(self.ball.get_pos(), rel_pos)
         
         
         # Sequence(
@@ -87,6 +102,32 @@ class ColorBall(NodePath):
         #     Func(self.ball.hit, clicked_pos, block, self.tower)
         # ).start()
 
+    
+    def bernstein(self, n, k, t):
+        coef = math.factorial(n) / (math.factorial(k) * math.factorial(n - k))
+        return coef * t ** k * (1 - t) ** (n - k)
+
+    def bezier_curve(self, dt):
+        self.total_dt += dt
+
+        if self.total_dt > 1:
+            self.total_dt = 1
+
+        n = len(self.control_pts) - 1
+        px = py = pz = 0
+
+        for i in range(len(self.control_pts)):
+            b = self.bernstein(n, i, self.total_dt)
+            px += np.dot(b, self.control_pts[i][0])
+            py += np.dot(b, self.control_pts[i][1])
+            pz += np.dot(b, self.control_pts[i][2])
+
+        self.ball.set_pos(px, py, pz)
+
+        if self.total_dt == 1:
+            return True
+
+  
     def moving(self):
         # pt = self.arr[self.move_idx]
         # self.ball.set_pos(pt[0], pt[1], pt[2])
@@ -124,7 +165,7 @@ class ColorBall(NodePath):
         # q2 = [2.58105, -5.59238, 18.1952]
         # q3 = [1.290525, -32.7962,  18.3476]
         q3 = (q1 + q2) / 2
-        q3.z += 10
+        q3.z += 5
         
         Q = [q1, q3, q2]
     
@@ -147,9 +188,23 @@ class ColorBall(NodePath):
                 self.ball.setZ(self.pos.z)
 
 
-class NormalBall(ColorBall):
+class Balls(NodePath):
 
-    def __init__(self, bubbles, parent):
+    def __init__(self, name, bubbles):
+        super().__init__(BulletRigidBodyNode(name))
+        self.model = Sphere()
+        self.model.reparent_to(self)
+        end, tip = self.model.get_tight_bounds()
+        size = tip - end
+        self.node().add_shape(BulletSphereShape(size.z / 2))
+        self.set_collide_mask(BitMask32.bit(3))
+        self.set_scale(0.2)
+        self.node().set_kinematic(True)
+
+
+class NormalBall(Balls):
+
+    def __init__(self, bubbles):
         super().__init__('normal_ball', bubbles)
 
     def hit(self, clicked_pos, block, tower):
@@ -167,11 +222,11 @@ class NormalBall(ColorBall):
         para.start()
 
 
-class MultiColorBall(ColorBall):
+class MultiColorBall(Balls):
 
     def __init__(self, bubbles):
         super().__init__('multicolor_ball', bubbles)
-        self.ball.setTexture(base.loader.loadTexture(PATH_TEXTURE_MULTI), 1)
+        self.model.setTexture(base.loader.loadTexture(PATH_TEXTURE_MULTI), 1)
 
     def _hit(self, color, tower):
         for block in tower.judge_colors(lambda x: x.getColor() == color):
@@ -187,11 +242,11 @@ class MultiColorBall(ColorBall):
         ).start()
 
 
-class TwoToneBall(ColorBall):
+class TwoToneBall(Balls):
 
     def __init__(self, bubbles):
         super().__init__('twotone_ball', bubbles)
-        self.multi_ballball.setTexture(base.loader.loadTexture(PATH_TEXTURE_TWOTONE), 1)
+        self.model.setTexture(base.loader.loadTexture(PATH_TEXTURE_TWOTONE), 1)
        
     def _hit(self, color, tower):
         for block in tower.judge_colors(lambda x: x.getColor() != color):

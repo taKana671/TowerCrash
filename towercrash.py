@@ -14,7 +14,7 @@ from panda3d.core import Vec3, LColor, BitMask32, Point3, Quat
 from direct.showbase.InputStateGlobal import inputState
 
 
-from ball import MultiColorBall, TwoToneBall, NormalBall
+from balls import ColorBall
 from bubble import Bubbles
 from lights import BasicAmbientLight, BasicDayLight
 from scene import Scene
@@ -41,6 +41,8 @@ class Game(Enum):
     START = auto()
     CLEAR = auto()
 
+    BALL_MOVING = auto()
+
 
 class BallNumberDisplay(OnscreenText):
 
@@ -51,7 +53,7 @@ class BallNumberDisplay(OnscreenText):
             align=TextNode.ACenter,
             scale=0.1,
             mayChange=True
-        ) 
+        )
 
 
 class TowerCrash(ShowBase):
@@ -75,9 +77,7 @@ class TowerCrash(ShowBase):
         self.camera.reparent_to(self.navigator)
 
         self.bubbles = Bubbles()
-        self.normal_ball = NormalBall(self.bubbles)
-        self.multi_ball = MultiColorBall(self.bubbles)
-        self.twotone_ball = TwoToneBall(self.bubbles)
+        self.ball = ColorBall(self.world, self.navigator, self.bubbles)
 
         self.gameover_seq = Sequence(Wait(3))
         self.start_screen = StartScreen(self)
@@ -130,7 +130,7 @@ class TowerCrash(ShowBase):
         self.tower = tower(24, self.scene.foundation, self.world)
         # self.tower = tower(6, self.scene.foundation, self.world)
         self.tower.build()
-        self.ball.initialize(self.tower)
+        # self.ball.initialize(self.tower)
 
         for _ in range(len(self.gameover_seq) - 1):
             self.gameover_seq.pop()
@@ -138,7 +138,7 @@ class TowerCrash(ShowBase):
         self.camera_highest_z = self.tower.floater.get_z(self.render)
 
         self.navigator.set_pos(0, 0, self.camera_lowest_z)
-        self.camera.set_pos(0, -74, 0)  # -64
+        self.camera.set_pos(0, -70, 0)  # -64
 
         # self.camera.set_pos(0, -64, self.camera_lowest_z)
 
@@ -146,23 +146,11 @@ class TowerCrash(ShowBase):
         self.camera.look_at(0, 0, self.camera_lowest_z + 4 * 2.5)
         self.moveup = 360
 
-    def setup_ball(self, n):
-        match color := Colors.select(n):
-            case 'MULTI':
-                self.ball = self.multi_ball
-            case 'TWOTONE':
-                self.used = True
-            case _:
-                self.ball = self.normal_ball
-                self.ball.set_color(color)
-
-        self.ball.setPos(self.start_pos)
-        self.ball.reparentTo(self.navigator)
-
-        self.state = Ball.READY
+    def setup_ball(self, n=5):
+        self.ball.setup(Colors.select(n))
         # show the number of throwing a ball.
-        self.ball_number.reparent_to(self.aspect2d)
-        self.ball_number.set_text(str(self.ball_cnt))
+        self.ball_number_display.reparent_to(self.aspect2d)
+        self.ball_number_display.setText(str(self.ball_cnt))
 
     def moveup_camera(self, dt):
         angle = dt * 100
@@ -254,7 +242,8 @@ class TowerCrash(ShowBase):
 
         if self.state == Game.START:
             if not self.moveup_camera(dt):
-                self.ball.setup(Colors.select(), self.camera)
+                # self.ball.setup(Colors.select(), self.camera)
+                self.setup_ball()
                 self.state = Game.PLAY
 
         if self.state == Game.CLEAR:
@@ -269,11 +258,12 @@ class TowerCrash(ShowBase):
             if self.click:
                 if clicked := self.control_mouse():
                     self.ball.move(*clicked)
-                    self.ball.state = Ball.MOVING
+                    # self.ball.state = Ball.MOVING
+                    self.state = Game.BALL_MOVING
                 self.click = False
 
             # if self.tower.tower_top <= 0 or self.ball.cnt == 0:
-            if self.tower.tower_top <= 1 or self.ball.cnt == 0:
+            if self.tower.tower_top <= 1 or self.ball_cnt == 0:
                 self.state = Game.CLEAR
 
             self.clean_sea_bottom()
@@ -287,13 +277,14 @@ class TowerCrash(ShowBase):
 
             if self.ball.state == Ball.DELETED and self.ball.cnt > 0:
                 n = 7 if not self.ball.used else 6
-                self.ball.setup(Colors.select(n), self.camera)
+                self.ball.setup(Colors.select(n))
 
-            if self.ball.state == Ball.MOVING:
-                try:
-                    self.ball.moving()
-                except IndexError:
-                    pass
+        if self.state == Game.BALL_MOVING:
+            if self.ball.bezier_curve(dt):
+                self.state = Game.PLAY
+
+
+
 
         self.world.do_physics(dt)
         return task.cont
