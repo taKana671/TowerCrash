@@ -26,9 +26,7 @@ class Colors(int, Enum):
     GREEN = (3, LColor(0, 0.5, 0, 1))
     VIOLET = (4, LColor(0.54, 0.16, 0.88, 1))
     MAGENTA = (5, LColor(1, 0, 1, 1))
-    MULTI = (6, None)
-    TWOTONE = (7, None)
-    GRAY = (8, LColor(0.25, 0.25, 0.25, 1))
+    GRAY = (6, LColor(0.25, 0.25, 0.25, 1))
 
     def __new__(cls, id_, rgba):
         obj = int.__new__(cls, id_)
@@ -37,10 +35,20 @@ class Colors(int, Enum):
         return obj
 
     @classmethod
-    def select(cls, b=5):
-        n = random.randint(0, b)
+    def random_select(cls):
+        """Randomly choose a color except for GRAY to return it (LVecBase4f).
+        """
+        n = random.randint(0, 5)
         color = cls(n)
-        return color.rgba if color.rgba else color.name
+        return color.rgba
+
+    @classmethod
+    def get_rgba(cls, n):
+        if n <= 5:
+            color = cls(n)
+            return color.rgba
+        else:
+            return cls.select()
 
 
 class Tower(NodePath):
@@ -77,7 +85,7 @@ class Tower(NodePath):
 
     def activate(self, block):
         block.clear_color()
-        block.set_color(Colors.select())
+        block.set_color(Colors.random_select())
         block.node().deactivation_enabled = False
         block.node().set_mass(1)
 

@@ -1,4 +1,5 @@
 import math
+import random
 from enum import Enum, auto
 
 import numpy as np
@@ -8,7 +9,7 @@ from panda3d.core import PandaNode, NodePath, TextNode, TransparencyAttrib
 from panda3d.core import Vec3, LColor, BitMask32, Point3, Quat
 from panda3d.bullet import BulletRigidBodyNode, BulletSphereShape
 
-
+from tower import Colors
 from create_geomnode import Sphere
 
 
@@ -51,68 +52,80 @@ class ColorBall:
         self.world.attach(self.twotone_ball.node())
 
     def initialize(self, tower):
+
         self.tower = tower
 
-        if self.ball is not None and self.ball.hasParent():
-            self._delete()
+        # if self.ball is not None and self.ball.hasParent():
+        #     self._delete()
         self.used = False
         self.state = None
         self.state = None
         self.pos = self.start_pos
         self.hpr = self.start_hpr
-        # self.ball_number.setText('')
 
-    def setup(self, color):
-        if color == 'MULTI':
-            self.ball = self.multi_ball
-        elif color == 'TWOTONE':
-            self.used = True
-            self.ball = self.twotone_ball
-        else:
-            self.ball = self.normal_ball
-            self.ball.setColor(color)
+    def setup(self, normal=True):
+        b = 5 if normal else \
+            7 if not self.used else 6
+
+        match n := random.randint(0, b):
+            case 6:
+                self.ball = self.multi_ball
+            case 7:
+                self.used = True
+                self.ball = self.twotone_ball
+            case _:
+                self.ball = self.normal_ball
+                color = Colors.get_rgba(n)
+                self.ball.set_color(color)
 
         self.ball.set_pos(self.start_pos)
-        self.ball.reparentTo(self.navigator)
-
-        self.state = Ball.READY
+        self.ball.reparent_to(self.navigator)
+        # print(self.ball.get_pos(), self.ball.is_hidden(), self.ball.getParent(), self.ball)
+        # self.state = Ball.READY
 
     def _delete(self):
-        self.detachNode()
+        self.ball.detach_node()
         self.state = Ball.DELETED
 
-    def move(self, clicked_pt, block):
+    def start(self, clicked_pt, block):
         self.state = Ball.MOVE
+        self.clicked_pt = clicked_pt
+        self.block = block
 
         start_pt = self.ball.get_pos()
         end_pt = self.navigator.get_relative_point(base.render, clicked_pt)
         mid = (start_pt + end_pt) / 2
         mid.z += 10
         self.control_pts = [start_pt, mid, end_pt]
-        self.total_dt = 0 
-        
-        # self.arr = self.bezier_curve2(self.ball.get_pos(), rel_pos)
-        # self.px, self.py, self.pz = self.bezier_curve2(self.ball.get_pos(), rel_pos)
-        
-        
-        # Sequence(
-        #     # self.ball.posHprInterval(0.5, clicked_pos, Vec3(0, 360, 0)),
-        #     self.ball.posHprInterval(0.5, rel_pos, Vec3(0, 360, 0)),
-        #     Func(self._delete),
-        #     Func(self.ball.hit, clicked_pos, block, self.tower)
-        # ).start()
+        self.total_dt = 0
 
-    
+    # def bezier_curve(self, dt):
+    #     self.total_dt += dt
+
+    #     if self.total_dt > 1:
+    #         self.total_dt = 1
+
+    #     n = len(self.control_pts) - 1
+    #     px = py = pz = 0
+
+    #     for i in range(len(self.control_pts)):
+    #         b = self.bernstein(n, i, self.total_dt)
+    #         px += np.dot(b, self.control_pts[i][0])
+    #         py += np.dot(b, self.control_pts[i][1])
+    #         pz += np.dot(b, self.control_pts[i][2])
+
+    #     return Point3(px, py, pz)
+    #     # self.ball.set_pos(px, py, pz)
+
+    #     if self.total_dt == 1:
+    #         return None
+
+
     def bernstein(self, n, k, t):
         coef = math.factorial(n) / (math.factorial(k) * math.factorial(n - k))
         return coef * t ** k * (1 - t) ** (n - k)
 
     def bezier_curve(self, dt):
-        self.total_dt += dt
-
-        if self.total_dt > 1:
-            self.total_dt = 1
-
         n = len(self.control_pts) - 1
         px = py = pz = 0
 
@@ -122,12 +135,39 @@ class ColorBall:
             py += np.dot(b, self.control_pts[i][1])
             pz += np.dot(b, self.control_pts[i][2])
 
-        self.ball.set_pos(px, py, pz)
+        return Point3(px, py, pz)
+
+    def move(self, dt):
+        self.total_dt += dt
+        if self.total_dt > 1:
+            self.total_dt = 1
+
+        pt = self.bezier_curve(dt)
+        self.ball.set_pos(pt)
 
         if self.total_dt == 1:
+            self._delete()
+            self.ball.hit(self.clicked_pt, self.block, self.tower)
             return True
 
-  
+    # def is_detached(self):
+    #     if not self.ball.hasParent():
+    #         return True
+    
+    def hit(self):
+        self._delete()
+        self.ball.hit(self.clicked_pt, self.block, self.tower)
+
+    
+        # Sequence(
+        #     # self.ball.posHprInterval(0.5, clicked_pos, Vec3(0, 360, 0)),
+        #     self.ball.posHprInterval(0.5, rel_pos, Vec3(0, 360, 0)),
+        #     Func(self._delete),
+        #     Func(self.ball.hit, clicked_pos, block, self.tower)
+        # ).start()
+
+
+
     def moving(self):
         # pt = self.arr[self.move_idx]
         # self.ball.set_pos(pt[0], pt[1], pt[2])
@@ -159,28 +199,6 @@ class ColorBall:
         # return np.rot90(np_arr, 2)
 
 
-    def bezier_curve2(self, q1, q2):
-        # 点の座標
-        # q1 = [0, -60, -1.5]
-        # q2 = [2.58105, -5.59238, 18.1952]
-        # q3 = [1.290525, -32.7962,  18.3476]
-        q3 = (q1 + q2) / 2
-        q3.z += 5
-        
-        Q = [q1, q3, q2]
-    
-        px = []
-        py = []
-        pz = []
-        t = np.arange(0, 1, 0.01)
-        for i in range(len(t)):
-            P = np.dot((1 - t[i]) ** 2, Q[0]) + np.dot(2 * (1 - t[i]) * t[i], Q[1]) + np.dot(t[i] ** 2, Q[2])
-            px.append(P[0])
-            py.append(P[1])
-            pz.append(P[2])
-        return px, py, pz
-
-
     def reposition(self, rotation_angle=None, vertical_distance=None):
         if self.state == Ball.READY:
             if vertical_distance:
@@ -206,17 +224,27 @@ class NormalBall(Balls):
 
     def __init__(self, bubbles):
         super().__init__('normal_ball', bubbles)
+        self.bubbles = bubbles
 
     def hit(self, clicked_pos, block, tower):
         blocks = []
         if self.getColor() == block.getColor():
             tower.get_neighbors(block, block.getColor(), blocks)
+        
+        # for block in blocks:
+        #     tower.clean_up(block)
+        
+        # print(blocks)  # [render/scene/foundation/tower/blocks/147, normal_ball, render/scene/foundation/tower/blocks/143]
+                        #    (ボールがneighborsに入ってしまっている。入らないようにしないといけない。)
         para = Parallel(self.bubbles.get_sequence(self.getColor(), clicked_pos))
 
         for block in blocks:
             pos = block.getPos()
+
+            tower.clean_up(block)
+
             para.append(Sequence(
-                Func(tower.clean_up, block),
+                # Func(tower.clean_up, block),
                 self.bubbles.get_sequence(self.getColor(), pos))
             )
         para.start()
@@ -227,6 +255,7 @@ class MultiColorBall(Balls):
     def __init__(self, bubbles):
         super().__init__('multicolor_ball', bubbles)
         self.model.setTexture(base.loader.loadTexture(PATH_TEXTURE_MULTI), 1)
+        self.bubbles = bubbles
 
     def _hit(self, color, tower):
         for block in tower.judge_colors(lambda x: x.getColor() == color):
@@ -247,7 +276,8 @@ class TwoToneBall(Balls):
     def __init__(self, bubbles):
         super().__init__('twotone_ball', bubbles)
         self.model.setTexture(base.loader.loadTexture(PATH_TEXTURE_TWOTONE), 1)
-       
+        self.bubbles = bubbles  
+
     def _hit(self, color, tower):
         for block in tower.judge_colors(lambda x: x.getColor() != color):
             pos = block.getPos()
@@ -258,7 +288,7 @@ class TwoToneBall(Balls):
     def hit(self, clicked_pos, block, tower):
         color = block.getColor()
         Parallel(
-            self.bubbles.get_sequence(Colors.select(), clicked_pos),
+            self.bubbles.get_sequence(Colors.random_select(), clicked_pos),
             *[seq for seq in self._hit(color, tower)]
         ).start()
 

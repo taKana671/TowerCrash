@@ -40,8 +40,10 @@ class Game(Enum):
     GAMEOVER = auto()
     START = auto()
     CLEAR = auto()
+    THROW = auto()
 
-    BALL_MOVING = auto()
+    HIT = auto()
+    SETUP = auto()
 
 
 class BallNumberDisplay(OnscreenText):
@@ -130,27 +132,27 @@ class TowerCrash(ShowBase):
         self.tower = tower(24, self.scene.foundation, self.world)
         # self.tower = tower(6, self.scene.foundation, self.world)
         self.tower.build()
-        # self.ball.initialize(self.tower)
+        self.ball.initialize(self.tower)
 
         for _ in range(len(self.gameover_seq) - 1):
             self.gameover_seq.pop()
 
         self.camera_highest_z = self.tower.floater.get_z(self.render)
-
-        self.navigator.set_pos(0, 0, self.camera_lowest_z)
+        self.navigator.set_pos_hpr(Point3(0, 0, self.camera_lowest_z), Vec3(0, 0, 0))
         self.camera.set_pos(0, -70, 0)  # -64
+        self.camera.look_at(0, 0, self.camera_lowest_z + 4 * 2.5)
 
         # self.camera.set_pos(0, -64, self.camera_lowest_z)
 
         self.ball_cnt = self.tower.level
-        self.camera.look_at(0, 0, self.camera_lowest_z + 4 * 2.5)
-        self.moveup = 360
 
-    def setup_ball(self, n=5):
-        self.ball.setup(Colors.select(n))
+    def setup_ball(self):
+        normal = True if self.ball_cnt >= 15 else False
+        self.ball.setup(normal)
         # show the number of throwing a ball.
         self.ball_number_display.reparent_to(self.aspect2d)
         self.ball_number_display.setText(str(self.ball_cnt))
+        self.ball_cnt -= 1
 
     def moveup_camera(self, dt):
         angle = dt * 100
@@ -242,7 +244,6 @@ class TowerCrash(ShowBase):
 
         if self.state == Game.START:
             if not self.moveup_camera(dt):
-                # self.ball.setup(Colors.select(), self.camera)
                 self.setup_ball()
                 self.state = Game.PLAY
 
@@ -257,9 +258,10 @@ class TowerCrash(ShowBase):
         if self.state == Game.PLAY:
             if self.click:
                 if clicked := self.control_mouse():
-                    self.ball.move(*clicked)
+                    self.ball.start(*clicked)
+                    self.ball_number_display.detach_node()
                     # self.ball.state = Ball.MOVING
-                    self.state = Game.BALL_MOVING
+                    self.state = Game.THROW
                 self.click = False
 
             # if self.tower.tower_top <= 0 or self.ball.cnt == 0:
@@ -275,20 +277,38 @@ class TowerCrash(ShowBase):
             if self.mouse_dragging:
                 self.rotate_camera(dt)
 
-            if self.ball.state == Ball.DELETED and self.ball.cnt > 0:
-                n = 7 if not self.ball.used else 6
-                self.ball.setup(Colors.select(n))
+            # if self.ball.state == Ball.DELETED and self.ball.cnt > 0:
+            #     n = 7 if not self.ball.used else 6
+            #     self.ball.setup(Colors.select(n))
 
-        if self.state == Game.BALL_MOVING:
-            if self.ball.bezier_curve(dt):
-                self.state = Game.PLAY
+        if self.state == Game.THROW:
+            if self.ball.move(dt):
+                # self.state = Game.HIT
+                if self.ball_cnt > 0:
+                    self.setup_ball()
+                    self.state = Game.PLAY
 
+        # if self.state == Game.HIT:
+        #     self.ball.hit()
+        #     self.state = Game.SETUP
+
+        # if self.state == Game.SETUP:
+        #     if self.ball_cnt > 0:
+        #         if self.ball.is_detached():
+        #             self.setup_ball()
+        #             self.state = Game.PLAY
 
 
 
         self.world.do_physics(dt)
         return task.cont
 
+    
+    
+    
+    
+    
+    
     def test_move_camera(self, direction, move):
         if direction == 'z':
             z = self.camera.get_z()
