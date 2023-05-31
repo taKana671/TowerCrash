@@ -121,7 +121,7 @@ class Tower(NodePath):
     def get_neighbors(self, block, color, blocks):
         blocks.append(block)
 
-        for con in self.world.contact_test(block.node()).get_contacts():
+        for con in self.world.contact_test(block.node(), use_filter=True).get_contacts():
             if (neighbor_nd := con.get_node1()) != self.foundation.node():
                 neighbor = NodePath(neighbor_nd)
                 if neighbor not in blocks and neighbor.get_color() == color:

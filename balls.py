@@ -1,6 +1,5 @@
 import math
 import random
-from enum import Enum, auto
 
 import numpy as np
 from direct.gui.DirectGui import OnscreenText, Plain, OnscreenImage, DirectButton
@@ -9,6 +8,7 @@ from panda3d.core import PandaNode, NodePath, TextNode, TransparencyAttrib
 from panda3d.core import Vec3, LColor, BitMask32, Point3, Quat
 from panda3d.bullet import BulletRigidBodyNode, BulletSphereShape
 
+from bubble import Bubbles
 from tower import Colors
 from create_geomnode import Sphere
 
@@ -21,26 +21,19 @@ CHECK_REPEAT = 0.2
 WAIT_COUNT = 5
 
 
-class Ball(Enum):
-
-    DELETED = auto()
-    READY = auto()
-    MOVE = auto()
-    MOVING = auto()
-
-
 class ColorBall:
 
-    def __init__(self, world, navigator, bubbles):
+    def __init__(self, world, navigator):
         # self.start_pos = Point3(0, -21, 0)
         self.start_pos = Point3(0, -60, 0)  # -50
 
-        self.bubbles = bubbles
+        self.bubbles = Bubbles()
         self.start_hpr = Vec3(95, 0, 30)
-        self.state = None
         self.move_idx = 0
         self.world = world
         self.navigator = navigator
+
+        self.ball = None
 
         self.normal_ball = NormalBall(self.bubbles)
         self.world.attach(self.normal_ball.node())
@@ -51,15 +44,10 @@ class ColorBall:
         self.twotone_ball = TwoToneBall(self.bubbles)
         self.world.attach(self.twotone_ball.node())
 
-    def initialize(self, tower):
-
-        self.tower = tower
-
-        # if self.ball is not None and self.ball.hasParent():
-        #     self._delete()
+    def initialize(self):
+        if self.ball is not None and self.ball.has_parent():
+            self._delete()
         self.used = False
-        self.state = None
-        self.state = None
         self.pos = self.start_pos
         self.hpr = self.start_hpr
 
@@ -81,45 +69,22 @@ class ColorBall:
         self.ball.set_pos(self.start_pos)
         self.ball.reparent_to(self.navigator)
         # print(self.ball.get_pos(), self.ball.is_hidden(), self.ball.getParent(), self.ball)
-        # self.state = Ball.READY
 
     def _delete(self):
         self.ball.detach_node()
-        self.state = Ball.DELETED
 
-    def start(self, clicked_pt, block):
-        self.state = Ball.MOVE
-        self.clicked_pt = clicked_pt
-        self.block = block
+    def aim_at(self, clicked_pt, block):
+        self.target_pt = clicked_pt
+        self.target_block = block
 
         start_pt = self.ball.get_pos()
-        end_pt = self.navigator.get_relative_point(base.render, clicked_pt)
+        # end_pt = self.navigator.get_relative_point(base.render, clicked_pt)
+        end_pt = self.ball.get_parent().get_relative_point(base.render, clicked_pt)
+
         mid = (start_pt + end_pt) / 2
         mid.z += 10
         self.control_pts = [start_pt, mid, end_pt]
         self.total_dt = 0
-
-    # def bezier_curve(self, dt):
-    #     self.total_dt += dt
-
-    #     if self.total_dt > 1:
-    #         self.total_dt = 1
-
-    #     n = len(self.control_pts) - 1
-    #     px = py = pz = 0
-
-    #     for i in range(len(self.control_pts)):
-    #         b = self.bernstein(n, i, self.total_dt)
-    #         px += np.dot(b, self.control_pts[i][0])
-    #         py += np.dot(b, self.control_pts[i][1])
-    #         pz += np.dot(b, self.control_pts[i][2])
-
-    #     return Point3(px, py, pz)
-    #     # self.ball.set_pos(px, py, pz)
-
-    #     if self.total_dt == 1:
-    #         return None
-
 
     def bernstein(self, n, k, t):
         coef = math.factorial(n) / (math.factorial(k) * math.factorial(n - k))
@@ -146,17 +111,17 @@ class ColorBall:
         self.ball.set_pos(pt)
 
         if self.total_dt == 1:
-            self._delete()
-            self.ball.hit(self.clicked_pt, self.block, self.tower)
+            # self._delete()
+            # self.ball.hit(self.clicked_pt, self.block, self.tower)
             return True
 
     # def is_detached(self):
     #     if not self.ball.hasParent():
     #         return True
     
-    def hit(self):
+    def hit(self, tower):
         self._delete()
-        self.ball.hit(self.clicked_pt, self.block, self.tower)
+        self.ball.hit(self.target_pt, self.target_block, tower)
 
     
         # Sequence(
@@ -168,42 +133,6 @@ class ColorBall:
 
 
 
-    def moving(self):
-        # pt = self.arr[self.move_idx]
-        # self.ball.set_pos(pt[0], pt[1], pt[2])
-        # self.move_idx += 1
-
-        self.ball.set_pos(self.px[self.move_idx], self.py[self.move_idx], self.pz[self.move_idx])
-        self.move_idx += 1
-    
-    # def bezier_curve2(self, q1, q2):
-        # q3 = (q1 + q2) / 2
-        # q3.z += 3
-        
-        # Q = [q1, q2, q3]
-        # arr = []
-
-        # t = np.arange(0, 1, 0.01)
-        # for i in range(len(t)):
-        #     pt = []
-        #     P = np.dot((1 - t[i]) ** 2, Q[0]) + np.dot(2 * (1 - t[i]) * t[i], Q[1]) + np.dot(t[i] ** 2, Q[2])
-        #     pt.append(P[0])
-        #     pt.append(P[1])
-        #     pt.append(P[2])
-        #     arr.append(pt)
-        #     # px.append(P[0])
-        #     # py.append(P[1])
-        #     # pz.append(P[2])
-        # np_arr = np.array(arr)
-
-        # return np.rot90(np_arr, 2)
-
-
-    def reposition(self, rotation_angle=None, vertical_distance=None):
-        if self.state == Ball.READY:
-            if vertical_distance:
-                self.pos.z -= vertical_distance
-                self.ball.setZ(self.pos.z)
 
 
 class Balls(NodePath):
@@ -230,21 +159,14 @@ class NormalBall(Balls):
         blocks = []
         if self.getColor() == block.getColor():
             tower.get_neighbors(block, block.getColor(), blocks)
-        
-        # for block in blocks:
-        #     tower.clean_up(block)
-        
-        # print(blocks)  # [render/scene/foundation/tower/blocks/147, normal_ball, render/scene/foundation/tower/blocks/143]
-                        #    (ボールがneighborsに入ってしまっている。入らないようにしないといけない。)
+
+        # print(blocks) 
         para = Parallel(self.bubbles.get_sequence(self.getColor(), clicked_pos))
 
         for block in blocks:
-            pos = block.getPos()
-
-            tower.clean_up(block)
-
+            pos = block.getPos(base.render)
             para.append(Sequence(
-                # Func(tower.clean_up, block),
+                Func(tower.clean_up, block),
                 self.bubbles.get_sequence(self.getColor(), pos))
             )
         para.start()
@@ -259,7 +181,8 @@ class MultiColorBall(Balls):
 
     def _hit(self, color, tower):
         for block in tower.judge_colors(lambda x: x.getColor() == color):
-            pos = block.getPos()
+            print(block)
+            pos = block.getPos(base.render)
             yield Sequence(Func(tower.clean_up, block),
                            self.bubbles.get_sequence(color, pos))
 
@@ -280,7 +203,7 @@ class TwoToneBall(Balls):
 
     def _hit(self, color, tower):
         for block in tower.judge_colors(lambda x: x.getColor() != color):
-            pos = block.getPos()
+            pos = block.getPos(base.render)
             color = block.getColor()
             yield Sequence(Func(tower.clean_up, block),
                            self.bubbles.get_sequence(color, pos))
