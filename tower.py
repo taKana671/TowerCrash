@@ -10,7 +10,7 @@ from panda3d.core import Quat, Vec3, LColor, BitMask32, Point3
 
 from create_geomnode import Cylinder
 
-PATH_CYLINDER = "models/cylinder/cylinder"
+# PATH_CYLINDER = "models/cylinder/cylinder"
 PATH_CUBE = 'models/cube/cube'
 PATH_TRIANGLE = 'models/trianglular-prism/trianglular-prism'
 
@@ -72,6 +72,7 @@ class Tower(NodePath):
 
     def build(self):
         self.build_tower()
+
         # Activate blocks in 8 rows from the top.
         for r in range(self.tower_top, self.inactive_top, -1):
             for block in self.find_blocks(r):
@@ -91,7 +92,7 @@ class Tower(NodePath):
 
     def find_blocks(self, row):
         for i in range(self.cols):
-            name = str(row * 7 + i)
+            name = str(row * self.cols + i)
             if not (block := self.blocks.find(name)).is_empty():
                 yield block
 
@@ -166,8 +167,8 @@ class TwinTower(RegisteredTower):
 
     level = 20
 
-    def __init__(self, stories, foundation, world):
-        super().__init__(world, stories, 7, foundation)
+    def __init__(self, rows, foundation, world):
+        super().__init__(world, rows, 7, foundation)
         self.cylinder_slim = CylinderBlock('cylinder_slim', Vec3(0.1, 0.1, 0.15))
         self.cylinder_wide = CylinderBlock('cylinder_wide', Vec3(0.25, 0.25, 0.15))
 
@@ -211,7 +212,7 @@ class TwinTower(RegisteredTower):
         yield from self.right_tower(even, h)
 
     def build_tower(self):
-        # After a block has attached to the world, change its mass to 0.
+        # After a block has been attached to the world, change its mass to 0.
         for i in range(self.rows):
             h = self.block_h * i
             for j, (pt, expand) in enumerate(self.block_position(i % 2 == 0, h)):
@@ -220,28 +221,6 @@ class TwinTower(RegisteredTower):
                 cylinder.set_color(Colors.GRAY.rgba)
                 cylinder.set_pos(pt)
                 self.attach_block(cylinder)
-
-# (Pdb) self.blocks[0][0]
-# render/scene/foundation/tower/0
-# (Pdb) first = self.blocks
-# (Pdb) first = self.blocks[0][0]
-# (Pdb) first.get_pos()
-# LPoint3f(-0.3, 0.05, 0)
-# (Pdb) top = self.blocks[23][3]
-# (Pdb) top
-# render/scene/foundation/tower/164
-# (Pdb) top.get_pos()
-# LPoint3f(0.25, -0.057735, 3.45)
-# (Pdb) 3.45 / 23
-# 0.15
-# (Pdb) top.get_pos(base.render)
-# LPoint3f(5, -1.1547, 75.5)
-# (Pdb) first.get_pos(base.render)
-# LPoint3f(-6, 1, 6.5)
-# (Pdb) 75.5 - 6.5
-# 69.0
-# (Pdb) 69 / 23
-# 3.0
 
 
 # class ThinTower(RegisteredTower):
@@ -268,40 +247,43 @@ class TwinTower(RegisteredTower):
 #                 self.blocks[i][j] = rect
 
 
-# class CylinderTower(RegisteredTower):
+class CylinderTower(RegisteredTower):
 
-#     level = 35
+    level = 35
 
-#     def __init__(self, stories, foundation, world):
-#         super().__init__(world, stories, foundation, Blocks(18, stories))
-#         self.block_h = 2.45
-#         self.radius = 4
-#         self.pts2d_even = [(x, y) for x, y in self.block_position(0, 360, 20)]
-#         self.pts2d_odd = [(x, y) for x, y in self.block_position(10, 360, 20)]
+    def __init__(self, rows, foundation, world):
+        super().__init__(world, rows, 18, foundation)
+        self.cylinder = CylinderBlock('cylinder', Vec3(0.1, 0.1, 0.15))
+        self.block_h = 0.15
+        self.radius = 0.29
+        self.pts2d_even = [(x, y) for x, y in self.block_position(0, 360, 20)]
+        self.pts2d_odd = [(x, y) for x, y in self.block_position(10, 360, 20)]
+        self.set_pos(Vec3(0, 0, 1.075))
 
-#     def round_down(self, n):
-#         str_n = str(n)
-#         idx = str_n.find('.')
-#         return float(str_n[:idx + 4])
+    def round_down(self, n):
+        str_n = str(n)
+        idx = str_n.find('.')
+        return float(str_n[:idx + 4])
 
-#     def block_position(self, start, end, step):
-#         for i in range(start, end, step):
-#             rad = self.round_down(math.radians(i))
-#             x = self.round_down(math.cos(rad) * self.radius)
-#             y = self.round_down(math.sin(rad) * self.radius)
-#             yield x, y
+    def block_position(self, start, end, step):
+        for i in range(start, end, step):
+            rad = self.round_down(math.radians(i))
+            x = self.round_down(math.cos(rad) * self.radius)
+            y = self.round_down(math.sin(rad) * self.radius)
+            yield x, y
 
-#     def build(self):
-#         for i in range(len(self.blocks)):
-#             points = self.pts2d_even if i % 2 == 0 else self.pts2d_odd
-#             h = (self.block_h * (i + 1))
+    def build_tower(self):
+        for i in range(self.rows):
+            points = self.pts2d_even if i % 2 == 0 else self.pts2d_odd
+            h = self.block_h * i
 
-#             for j, (x, y) in enumerate(points):
-#                 pt = Point3(x, y, h) + self.center
-#                 color, state = self.get_attrib(i)
-#                 cylinder = Cylinder(self, pt, str(i * self.blocks.cols + j), color, state)
-#                 self.attach_block(state, cylinder)
-#                 self.blocks[i][j] = cylinder
+            for j, (x, y) in enumerate(points):
+                pt = Point3(x, y, h)
+                cylinder = self.cylinder.copy_to(self.blocks)
+                cylinder.set_name(str(i * self.cols + j))
+                cylinder.set_color(Colors.GRAY.rgba)
+                cylinder.set_pos(pt)
+                self.attach_block(cylinder)
 
 
 # class TripleTower(RegisteredTower):
@@ -429,27 +411,6 @@ class TwinTower(RegisteredTower):
 #                 self.attach_block(state, cube)
 #                 self.blocks[i][j] = cube
 
-
-# class CylinderBlock(NodePath):
-
-#     def __init__(self, root, model, pos, name, color, state, expand=False):
-#         super().__init__(BulletRigidBodyNode(name))
-#         self.reparentTo(root)
-#         # cylinder = base.loader.loadModel(PATH_CYLINDER)
-#         cylinder = model.copy_to(self)
-#         # cylinder.reparentTo(self)
-#         end, tip = cylinder.getTightBounds()
-#         self.node().addShape(BulletCylinderShape((tip - end) / 2))
-#         n = 4 if int(name) > 24 else 3
-#         self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(n))
-#         self.node().setMass(1)
-#         if expand:
-#             self.setScale(Vec3(0.4, 0.4, 0.35))
-#         else:
-#             self.setScale(0.2, 0.2, 0.35)
-#         self.setColor(color)
-#         self.setPos(pos)
-#         self.state = state
 
 class CylinderBlock(NodePath):
 

@@ -77,7 +77,7 @@ class TowerCrash(ShowBase):
         self.navigator.reparent_to(self.render)
         self.camera.reparent_to(self.navigator)
 
-        self.ball = ColorBall(self.world, self.navigator)
+        self.ball = ColorBall(self.world)
 
         self.start_screen = StartScreen(self)
         self.ball_number_display = BallNumberDisplay()
@@ -119,15 +119,13 @@ class TowerCrash(ShowBase):
         self.start_screen.reparentTo(self.aspect2d)
         self.state = None
         self.descent_distance = 0
-        # self.mouse_dragging = 0
-        # self.click = False
 
-        self.mouse_dragging = False
+        self.dragging = 0
         self.click = False
         self.timer = 0
 
-        tower = towers[self.tower_num]
-        # tower = towers[4]
+        # tower = towers[self.tower_num]
+        tower = towers[1]
         self.tower = tower(24, self.scene.foundation, self.world)
         self.tower.build()
 
@@ -136,16 +134,18 @@ class TowerCrash(ShowBase):
         self.camera.set_pos(0, -70, 0)  # -64
         self.camera.look_at(0, 0, self.camera_lowest_z + 4 * 2.5)
 
-        self.ball.initialize()
+        self.ball.initialize(self.tower)
         self.ball_cnt = self.tower.level
 
     def setup_ball(self):
-        normal = True if self.ball_cnt >= 15 else False
-        self.ball.setup(normal)
+        start_pos = Point3(0, -60, 0)
+        # normal = True if self.ball_cnt >= 15 else False
+        normal = False
+        self.ball.setup(start_pos, self.navigator, normal)
+
         # show the number of throwing a ball.
         self.ball_number_display.reparent_to(self.aspect2d)
         self.ball_number_display.setText(str(self.ball_cnt))
-        # self.ball_cnt -= 1
 
     def moveup_camera(self, dt):
         angle = dt * 100
@@ -166,54 +166,46 @@ class TowerCrash(ShowBase):
 
         return True
 
-    def control_mouse(self):
-        if self.mouseWatcherNode.has_mouse():
-            mouse_pos = self.mouseWatcherNode.get_mouse()
-            near_pos = Point3()
-            far_pos = Point3()
-            self.camLens.extrude(mouse_pos, near_pos, far_pos)
+    def choose_block(self, mouse_pos):
+        near_pos = Point3()
+        far_pos = Point3()
+        self.camLens.extrude(mouse_pos, near_pos, far_pos)
 
-            from_pos = self.render.get_relative_point(self.cam, near_pos)
-            to_pos = self.render.get_relative_point(self.cam, far_pos)
-            result = self.world.ray_test_closest(from_pos, to_pos, BitMask32.bit(1))
+        from_pos = self.render.get_relative_point(self.cam, near_pos)
+        to_pos = self.render.get_relative_point(self.cam, far_pos)
+        result = self.world.ray_test_closest(from_pos, to_pos, BitMask32.bit(1))
 
-            if result.hasHit():
-                if (nd := result.get_node()).is_active():
-                    clicked_pt = result.get_hit_pos()
-                    block = NodePath(nd)
-                    self.ball.aim_at(clicked_pt, block)
-                    return True
-                    # return clicked_pos, NodePath(nd)
-            else:
-                self.mouse_x = 0
-                self.mouse_dragging = globalClock.get_frame_count() + WAIT_COUNT
-        # return None
+        if result.hasHit():
+            if (nd := result.get_node()).is_active():
+                clicked_pt = result.get_hit_pos()
+                block = NodePath(nd)
+                self.ball.aim_at(clicked_pt, block)
+                return True
 
     def mouse_click(self):
         self.click = True
 
     def mouse_release(self):
-        self.mouse_dragging = 0
+        self.dragging = 0
 
-    def rotate_camera(self, dt):
-        mouse_x = self.mouseWatcherNode.get_mouse_x()
-        if globalClock.get_frame_count() >= self.mouse_dragging:
-            angle = 0
-            if (delta := mouse_x - self.mouse_x) < 0:
-                angle += 90
-            elif delta > 0:
-                angle -= 90
-            angle *= dt
+    def rotate_camera(self, mouse_x, dt):
+        angle = 0
 
-            self.navigator.set_h(self.navigator.get_h() + angle)
-        self.mouse_x = mouse_x
+        if (delta := mouse_x - self.mouse_x) < 0:
+            # rotate leftward
+            angle += 90
+        elif delta > 0:
+            # rotate rightward
+            angle -= 90
+        angle *= dt
+
+        self.navigator.set_h(self.navigator.get_h() + angle)
 
     def move_down_camera(self, dt):
         if self.navigator.get_z() > self.camera_lowest_z:
             distance = 10 * dt
             self.navigator.set_z(self.navigator.get_z() - distance)
 
- 
     def game_over(self):
         # if self.tower.tower_top <= 0:
         if self.tower.tower_top <= 1:
@@ -238,61 +230,49 @@ class TowerCrash(ShowBase):
                 self.setup_ball()
                 self.state = Game.PLAY
 
-        # if self.state == Game.CLEAR:
-        #     self.clear()
-        #     self.state = Game.GAMEOVER
-
         if self.state == Game.GAMEOVER:
             self.game_over()
-            # if not self.gameover_seq.is_playing():
-                # self.game_over()
 
         if self.state == Game.PLAY:
-            # if self.mouseWatcherNode.has_mouse():
-                # マウスが関係するところは、ここに入れる？ことを検討
-                # mouse_pos = self.mouseWatcherNode.get_mouse()
-                # if self.click:
-                    # if self.control_mouse(mouse_pos):
-                        # pass
-                # if dragging:
-                    # pass
+            if self.mouseWatcherNode.has_mouse():
+                mouse_pos = self.mouseWatcherNode.get_mouse()
 
+                if self.click:
+                    if self.choose_block(mouse_pos):
+                        self.ball_number_display.detach_node()
+                        self.ball_cnt -= 1
+                        self.state = Game.THROW
+                    else:
+                        self.mouse_x = 0
+                        self.dragging = globalClock.get_frame_count() + WAIT_COUNT
+                    self.click = False
 
-            if self.click:
-                if self.control_mouse():
-                    self.ball_number_display.detach_node()
-                    self.ball_cnt -= 1
-                    self.state = Game.THROW
-                self.click = False
+                if 0 < self.dragging <= globalClock.get_frame_count():
+                    self.rotate_camera(mouse_pos.x, dt)
+                    self.mouse_x = mouse_pos.x
 
-            if self.tower.tower_top <= 1 or self.ball_cnt == 0:
-                self.state = Game.GAMEOVER
-
-            self.clean_sea_bottom()
             self.tower.update()
 
             if self.navigator.get_z() > self.tower.floater.get_z(self.render):
                 self.move_down_camera(dt)
 
-            if self.mouse_dragging:
-                self.rotate_camera(dt)
-
         if self.state == Game.THROW:
-            if self.ball.move(dt):
+            if not self.ball.move(dt):
                 self.state = Game.HIT
-                # if self.ball_cnt > 0:
-                #     self.setup_ball()
-                #     self.state = Game.PLAY
 
         if self.state == Game.HIT:
-            self.ball.hit(self.tower)
+            self.ball.hit()
             if self.ball_cnt > 0:
                 self.setup_ball()
                 self.state = Game.PLAY
 
+        if self.tower.tower_top <= 1 or self.ball_cnt == 0:
+            self.state = Game.GAMEOVER
+
+        self.clean_sea_bottom()
+
         self.world.do_physics(dt)
         return task.cont
-
 
     def test_move_camera(self, direction, move):
         if direction == 'z':
