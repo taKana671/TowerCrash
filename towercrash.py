@@ -125,7 +125,7 @@ class TowerCrash(ShowBase):
         self.timer = 0
 
         # tower = towers[self.tower_num]
-        tower = towers[1]
+        tower = towers[0]
         self.tower = tower(24, self.scene.foundation, self.world)
         self.tower.build()
 

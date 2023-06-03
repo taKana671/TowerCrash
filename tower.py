@@ -8,7 +8,7 @@ from panda3d.bullet import BulletRigidBodyNode
 from panda3d.core import PandaNode, NodePath, TransformState
 from panda3d.core import Quat, Vec3, LColor, BitMask32, Point3
 
-from create_geomnode import Cylinder
+from create_geomnode import Cylinder, Cube
 
 # PATH_CYLINDER = "models/cylinder/cylinder"
 PATH_CUBE = 'models/cube/cube'
@@ -213,6 +213,7 @@ class TwinTower(RegisteredTower):
 
     def build_tower(self):
         # After a block has been attached to the world, change its mass to 0.
+
         for i in range(self.rows):
             h = self.block_h * i
             for j, (pt, expand) in enumerate(self.block_position(i % 2 == 0, h)):
@@ -426,6 +427,19 @@ class CylinderBlock(NodePath):
         self.cylinder.reparent_to(self)
 
 
+class CubeBlock(NodePath):
+
+    def __init__(self, name, scale):
+        super().__init__(BulletRigidBodyNode(name))
+        self.cube = Cube()
+        end, tip = self.cube.getTightBounds()
+        self.node().addShape(BulletBoxShape((tip - end) / 2))
+        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(4))
+        self.node().setMass(1)
+        self.set_scale(scale)
+        self.cube.reparent_to(self)
+
+
 class Rectangle(NodePath):
 
     def __init__(self, root, pos, name, color, state, sx, heading=0):
@@ -469,28 +483,28 @@ class TriangularPrism(NodePath):
         self.state = state
 
 
-class Cube(NodePath):
+# class Cube(NodePath):
 
-    scales = {
-        'normal': Vec3(0.7, 0.7, 0.7),
-        'short': Vec3(0.46, 0.7, 0.7),
-        'large': Vec3(1.02, 1.02, 0.7),
-        'long': Vec3(1.04, 0.7, 0.7),
-    }
+#     scales = {
+#         'normal': Vec3(0.7, 0.7, 0.7),
+#         'short': Vec3(0.46, 0.7, 0.7),
+#         'large': Vec3(1.02, 1.02, 0.7),
+#         'long': Vec3(1.04, 0.7, 0.7),
+#     }
 
-    def __init__(self, root, pos, name, color, state, scale, heading=0):
-        super().__init__(BulletRigidBodyNode(name))
-        self.reparentTo(root)
-        cube = base.loader.loadModel(PATH_CUBE)
-        cube.reparentTo(self)
-        end, tip = cube.getTightBounds()
-        self.node().addShape(BulletBoxShape((tip - end) / 2))
-        n = 3 if not int(name) % 20 else 4
-        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(n))
-        self.node().setMass(1)
-        self.setScale(Cube.scales[scale])
-        self.setColor(color)
-        self.setPos(pos)
-        if heading:
-            self.setH(heading)
-        self.state = state
+#     def __init__(self, root, pos, name, color, state, scale, heading=0):
+#         super().__init__(BulletRigidBodyNode(name))
+#         self.reparentTo(root)
+#         cube = base.loader.loadModel(PATH_CUBE)
+#         cube.reparentTo(self)
+#         end, tip = cube.getTightBounds()
+#         self.node().addShape(BulletBoxShape((tip - end) / 2))
+#         n = 3 if not int(name) % 20 else 4
+#         self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(n))
+#         self.node().setMass(1)
+#         self.setScale(Cube.scales[scale])
+#         self.setColor(color)
+#         self.setPos(pos)
+#         if heading:
+#             self.setH(heading)
+#         self.state = state

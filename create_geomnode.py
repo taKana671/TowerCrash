@@ -271,6 +271,13 @@ class Sphere(GeomRoot):
 
 class Cube(GeomRoot):
     """Create a geom node of cube.
+        Arges:
+            w (int): width; dimension along the x-axis; cannot be negative;
+            d (int): depth; dimension along the y-axis; cannot be negative;
+            h (int): height; dimension along the z-axis; cannot be negative;
+            segs_w (int) the number of subdivisions in width;
+            segs_d (int) the number of subdivisions in depth;
+            segs_h (int) the number of subdivisions in height
     """
 
     def __init__(self, w=1, d=1, h=1, segs_w=2, segs_d=2, segs_h=2):
@@ -281,97 +288,78 @@ class Cube(GeomRoot):
         self.segs_d = 2
         self.segs_h = 2
 
-        # geomnode = self.create_cube()
-        # super().__init__(geomnode)
-        self.create_cube()  
+        geomnode = self.create_cube()
+        super().__init__(geomnode)
 
-
-    def create_top(self, vdata_values, prim_indices):
-
-        x_start = -0.5 * self.w
-        y_start = -0.5 * self.d
-        z = 0.5 * self.h
-        u = v = 0
-
-        for i in range(self.segs_d + 1):
-            y = y_start + i / self.segs_d
-            v = i / self.segs_d
-            for j in range(self.segs_w + 1):
-                x = x_start + j / self.segs_w
-                u = j / self.segs_w
-                vertex = (x, y, z)
-                normal = (0, 0, 1)
-                color = (1, 1, 1, 1)
-                uv = (u, v)
-
-                print(vertex, normal, color, uv)
-
-    
     def create_sides(self, vdata_values, prim_indices):
+        color = (1, 1, 1, 1)
+        vertex_count = 0
         vertex = Point3()
         segs = (self.segs_w, self.segs_d, self.segs_h)
         dims = (self.w, self.d, self.h)
-        
-        side_idxes = {
-            (1, 0, 2, -1, False),
-            (0, 1, 2, 1, False),
-            (1, 0, 2, 1, True),
-            (0, 1, 2, -1, True)
-        }
 
-        for i0, i1, i2, n, reverse in side_idxes:
+        # (fixed, outer loop, inner loop, normal, uv)
+        side_idxes = [
+            (2, 1, 0, 1, False),     # top
+            (1, 0, 2, -1, False),    # front
+            (0, 1, 2, 1, False),     # right
+            (1, 0, 2, 1, True),      # back
+            (0, 1, 2, -1, True),     # left
+            (2, 1, 0, -1, False),    # bottom
+        ]
+
+        for a, (i0, i1, i2, n, reverse) in enumerate(side_idxes):
+            segs1 = segs[i1]
+            segs2 = segs[i2]
+            dim1_start = dims[i1] * -0.5
+            dim2_start = dims[i2] * -0.5
+
             normal = Vec3()
             normal[i0] = n
             vertex[i0] = dims[i0] * 0.5 * n
 
-            segs1 = segs[i1]
-            segs2 = segs[i2]
-
-            dim1_start = dims[i1] * -0.5
-            dim2_start = dims[i2] * -0.5
-
             for j in range(segs2 + 1):
                 vertex[i2] = dim2_start + j / segs2
                 v = j / segs2
+
                 for k in range(segs1 + 1):
                     vertex[i1] = dim1_start + k / segs1
-                    u = 1 - k / segs1 if reverse else k / segs1
-                    color = (1, 1, 1, 1)
-                    uv = (u, v)
+                    u = k / segs1
+                    vdata_values.extend(vertex)
+                    vdata_values.extend(color)
+                    vdata_values.extend(normal)
+                    vdata_values.extend((u, v))
 
-                    print(vertex, normal, color, uv)
+                if j > 0:
+                    for k in range(segs1):
+                        idx = vertex_count + j * (segs1 + 1) + k
+                        prim_indices.extend((idx, idx - segs1 - 1, idx - segs1))
+                        prim_indices.extend((idx, idx - segs1, idx + 1))
 
+            vertex_count += (segs1 + 1) * (segs2 + 1)
 
-    def create_bottom(self, vdata_values, prim_indices):
-
-        x_start = -0.5 * self.w
-        y_start = -0.5 * self.d
-        z = 0.5 * self.h
-        u = v = 0
-
-        for i in range(self.segs_d + 1):
-            y = y_start + i / self.segs_d
-            v = i / self.segs_d
-            for j in range(self.segs_w + 1):
-                x = x_start + j / self.segs_w
-                u = i / self.segs_w
-                vertex = (x, y, z)
-                normal = (0, 0, -1)
-                color = (1, 1, 1, 1)
-                uv = (u, v)
-
-                print(vertex, normal, color, uv)
+        return vertex_count
 
     def create_cube(self):
         fmt = self.create_format()
         vdata_values = array.array('f', [])
         prim_indices = array.array('H', [])
-        vertex_count = 0
 
-        self.create_top(vdata_values, prim_indices)
-        self.create_sides(vdata_values, prim_indices)
+        vertex_count = self.create_sides(vdata_values, prim_indices)
 
+        vdata = GeomVertexData('sphere', fmt, Geom.UHStatic)
+        vdata.unclean_set_num_rows(vertex_count)
+        vdata_mem = memoryview(vdata.modify_array(0)).cast('B').cast('f')
+        vdata_mem[:] = vdata_values
 
+        prim = GeomTriangles(Geom.UHStatic)
+        prim_array = prim.modify_vertices()
+        prim_array.unclean_set_num_rows(len(prim_indices))
+        prim_mem = memoryview(prim_array).cast('B').cast('H')
+        prim_mem[:] = prim_indices
 
-if __name__ == '__main__':
-    cube = Cube()
+        node = GeomNode('geomnode')
+        geom = Geom(vdata)
+        geom.add_primitive(prim)
+        node.add_geom(geom)
+        return node
