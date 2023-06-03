@@ -1,7 +1,7 @@
 import array
 import math
 
-from panda3d.core import Vec3
+from panda3d.core import Vec3, Point3
 from panda3d.core import NodePath
 from panda3d.core import Geom, GeomNode, GeomTriangles
 from panda3d.core import GeomVertexFormat, GeomVertexData, GeomVertexArrayFormat
@@ -267,3 +267,111 @@ class Sphere(GeomRoot):
         geom.add_primitive(prim)
         node.add_geom(geom)
         return node
+
+
+class Cube(GeomRoot):
+    """Create a geom node of cube.
+    """
+
+    def __init__(self, w=1, d=1, h=1, segs_w=2, segs_d=2, segs_h=2):
+        self.w = w
+        self.d = d
+        self.h = h
+        self.segs_w = 2
+        self.segs_d = 2
+        self.segs_h = 2
+
+        # geomnode = self.create_cube()
+        # super().__init__(geomnode)
+        self.create_cube()  
+
+
+    def create_top(self, vdata_values, prim_indices):
+
+        x_start = -0.5 * self.w
+        y_start = -0.5 * self.d
+        z = 0.5 * self.h
+        u = v = 0
+
+        for i in range(self.segs_d + 1):
+            y = y_start + i / self.segs_d
+            v = i / self.segs_d
+            for j in range(self.segs_w + 1):
+                x = x_start + j / self.segs_w
+                u = j / self.segs_w
+                vertex = (x, y, z)
+                normal = (0, 0, 1)
+                color = (1, 1, 1, 1)
+                uv = (u, v)
+
+                print(vertex, normal, color, uv)
+
+    
+    def create_sides(self, vdata_values, prim_indices):
+        vertex = Point3()
+        segs = (self.segs_w, self.segs_d, self.segs_h)
+        dims = (self.w, self.d, self.h)
+        
+        side_idxes = {
+            (1, 0, 2, -1, False),
+            (0, 1, 2, 1, False),
+            (1, 0, 2, 1, True),
+            (0, 1, 2, -1, True)
+        }
+
+        for i0, i1, i2, n, reverse in side_idxes:
+            normal = Vec3()
+            normal[i0] = n
+            vertex[i0] = dims[i0] * 0.5 * n
+
+            segs1 = segs[i1]
+            segs2 = segs[i2]
+
+            dim1_start = dims[i1] * -0.5
+            dim2_start = dims[i2] * -0.5
+
+            for j in range(segs2 + 1):
+                vertex[i2] = dim2_start + j / segs2
+                v = j / segs2
+                for k in range(segs1 + 1):
+                    vertex[i1] = dim1_start + k / segs1
+                    u = 1 - k / segs1 if reverse else k / segs1
+                    color = (1, 1, 1, 1)
+                    uv = (u, v)
+
+                    print(vertex, normal, color, uv)
+
+
+    def create_bottom(self, vdata_values, prim_indices):
+
+        x_start = -0.5 * self.w
+        y_start = -0.5 * self.d
+        z = 0.5 * self.h
+        u = v = 0
+
+        for i in range(self.segs_d + 1):
+            y = y_start + i / self.segs_d
+            v = i / self.segs_d
+            for j in range(self.segs_w + 1):
+                x = x_start + j / self.segs_w
+                u = i / self.segs_w
+                vertex = (x, y, z)
+                normal = (0, 0, -1)
+                color = (1, 1, 1, 1)
+                uv = (u, v)
+
+                print(vertex, normal, color, uv)
+
+    def create_cube(self):
+        fmt = self.create_format()
+        vdata_values = array.array('f', [])
+        prim_indices = array.array('H', [])
+        vertex_count = 0
+
+        self.create_top(vdata_values, prim_indices)
+        self.create_sides(vdata_values, prim_indices)
+
+
+
+if __name__ == '__main__':
+    cube = Cube()
