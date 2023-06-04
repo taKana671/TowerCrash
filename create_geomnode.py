@@ -9,7 +9,8 @@ from panda3d.core import GeomVertexFormat, GeomVertexData, GeomVertexArrayFormat
 
 class GeomRoot(NodePath):
 
-    def __init__(self, geomnode):
+    def __init__(self):
+        geomnode = self.create_geomnode()
         super().__init__(geomnode)
         self.set_two_sided(True)
 
@@ -23,7 +24,7 @@ class GeomRoot(NodePath):
         return fmt
 
 
-class Cylinder(GeomRoot):
+class CylinderGeom(GeomRoot):
     """Create a geom node of cylinder.
        Args:
             radius (float): the radius of the cylinder; cannot be negative;
@@ -37,8 +38,7 @@ class Cylinder(GeomRoot):
         self.segs_c = segs_c
         self.height = height
         self.segs_a = segs_a
-        geomnode = self.create_cylinder()
-        super().__init__(geomnode)
+        super().__init__()
 
     def cap_vertices(self, delta_angle, bottom=True):
         z = 0 if bottom else self.height
@@ -123,7 +123,8 @@ class Cylinder(GeomRoot):
 
         return self.segs_c + 1
 
-    def create_cylinder(self):
+    # def create_cylinder(self):
+    def create_geomnode(self):
         fmt = self.create_format()
         vdata_values = array.array('f', [])
         prim_indices = array.array('H', [])
@@ -154,7 +155,7 @@ class Cylinder(GeomRoot):
         return node
 
 
-class Sphere(GeomRoot):
+class SphereGeom(GeomRoot):
     """Create a geom node of sphere.
        Args:
             radius (int): the radius of sphere;
@@ -164,8 +165,7 @@ class Sphere(GeomRoot):
     def __init__(self, radius=1.5, segments=22):
         self.radius = radius
         self.segments = segments
-        geomnode = self.create_sphere(radius, segments)
-        super().__init__(geomnode)
+        super().__init__()
 
     def create_bottom_pole(self, vdata_values, prim_indices):
         # the bottom pole vertices
@@ -240,7 +240,8 @@ class Sphere(GeomRoot):
 
         return self.segments
 
-    def create_sphere(self, radius, segments):
+    # def create_sphere(self, radius, segments):
+    def create_geomnode(self):
         fmt = self.create_format()
         vdata_values = array.array('f', [])
         prim_indices = array.array('H', [])
@@ -249,7 +250,7 @@ class Sphere(GeomRoot):
         # create vertices of the bottom pole, quads, and top pole
         vertex_count += self.create_bottom_pole(vdata_values, prim_indices)
         vertex_count += self.create_quads(vertex_count, vdata_values, prim_indices)
-        vertex_count += self.create_top_pole(vertex_count - segments - 1, vdata_values, prim_indices)
+        vertex_count += self.create_top_pole(vertex_count - self.segments - 1, vdata_values, prim_indices)
 
         vdata = GeomVertexData('sphere', fmt, Geom.UHStatic)
         vdata.unclean_set_num_rows(vertex_count)
@@ -269,7 +270,7 @@ class Sphere(GeomRoot):
         return node
 
 
-class Cube(GeomRoot):
+class CubeGeom(GeomRoot):
     """Create a geom node of cube.
         Arges:
             w (int): width; dimension along the x-axis; cannot be negative;
@@ -287,9 +288,7 @@ class Cube(GeomRoot):
         self.segs_w = 2
         self.segs_d = 2
         self.segs_h = 2
-
-        geomnode = self.create_cube()
-        super().__init__(geomnode)
+        super().__init__()
 
     def create_sides(self, vdata_values, prim_indices):
         color = (1, 1, 1, 1)
@@ -340,14 +339,14 @@ class Cube(GeomRoot):
 
         return vertex_count
 
-    def create_cube(self):
+    def create_geomnode(self):
         fmt = self.create_format()
         vdata_values = array.array('f', [])
         prim_indices = array.array('H', [])
 
         vertex_count = self.create_sides(vdata_values, prim_indices)
 
-        vdata = GeomVertexData('sphere', fmt, Geom.UHStatic)
+        vdata = GeomVertexData('cube', fmt, Geom.UHStatic)
         vdata.unclean_set_num_rows(vertex_count)
         vdata_mem = memoryview(vdata.modify_array(0)).cast('B').cast('f')
         vdata_mem[:] = vdata_values

@@ -9,7 +9,7 @@ from panda3d.bullet import BulletRigidBodyNode, BulletSphereShape
 
 from bubble import Bubbles
 from tower import Colors
-from create_geomnode import Sphere
+from create_geomnode import SphereGeom
 
 
 PATH_TEXTURE_MULTI = 'textures/multi.jpg'
@@ -110,7 +110,7 @@ class Balls(NodePath):
 
     def __init__(self, name):
         super().__init__(BulletRigidBodyNode(name))
-        self.model = Sphere()
+        self.model = SphereGeom()
         self.model.reparent_to(self)
         end, tip = self.model.get_tight_bounds()
         size = tip - end

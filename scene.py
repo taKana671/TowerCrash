@@ -17,7 +17,7 @@ from panda3d.core import Filename
 from panda3d.core import PNMImage
 
 
-from create_geomnode import Cylinder
+from create_geomnode import CylinderGeom
 
 
 load_prc_file_data("", """
@@ -40,7 +40,7 @@ class Foundation(NodePath):
     def __init__(self):
         super().__init__(BulletRigidBodyNode('foundation'))
         # stone = base.loader.load_model(PATH_STONE)
-        stone = Cylinder()
+        stone = CylinderGeom()
         stone.set_texture(
             base.loader.load_texture(TEXTURE_STONE), 1)
         stone.reparent_to(self)
