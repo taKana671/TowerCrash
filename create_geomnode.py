@@ -23,6 +23,30 @@ class GeomRoot(NodePath):
         fmt = GeomVertexFormat.register_format(arr_format)
         return fmt
 
+    def create_geomnode(self):
+        fmt = self.create_format()
+        vdata_values = array.array('f', [])
+        prim_indices = array.array('H', [])
+
+        vertex_count = self.get_vertices(vdata_values, prim_indices)
+
+        vdata = GeomVertexData('cube', fmt, Geom.UHStatic)
+        vdata.unclean_set_num_rows(vertex_count)
+        vdata_mem = memoryview(vdata.modify_array(0)).cast('B').cast('f')
+        vdata_mem[:] = vdata_values
+
+        prim = GeomTriangles(Geom.UHStatic)
+        prim_array = prim.modify_vertices()
+        prim_array.unclean_set_num_rows(len(prim_indices))
+        prim_mem = memoryview(prim_array).cast('B').cast('H')
+        prim_mem[:] = prim_indices
+
+        node = GeomNode('geomnode')
+        geom = Geom(vdata)
+        geom.add_primitive(prim)
+        node.add_geom(geom)
+        return node
+
 
 class CylinderGeom(GeomRoot):
     """Create a geom node of cylinder.
@@ -123,11 +147,7 @@ class CylinderGeom(GeomRoot):
 
         return self.segs_c + 1
 
-    # def create_cylinder(self):
-    def create_geomnode(self):
-        fmt = self.create_format()
-        vdata_values = array.array('f', [])
-        prim_indices = array.array('H', [])
+    def get_vertices(self, vdata_values, prim_indices):
         delta_angle = 2 * math.pi / self.segs_c
         vertex_count = 0
 
@@ -136,23 +156,7 @@ class CylinderGeom(GeomRoot):
         vertex_count += self.create_mantle(vertex_count, delta_angle, vdata_values, prim_indices)
         vertex_count += self.create_top_cap(vertex_count, delta_angle, vdata_values, prim_indices)
 
-        vdata = GeomVertexData('cylinder', fmt, Geom.UHStatic)
-        vdata.unclean_set_num_rows(vertex_count)
-        vdata_mem = memoryview(vdata.modify_array(0)).cast('B').cast('f')
-        vdata_mem[:] = vdata_values
-
-        prim = GeomTriangles(Geom.UHStatic)
-        prim_array = prim.modify_vertices()
-
-        prim_array.unclean_set_num_rows(len(prim_indices))
-        prim_mem = memoryview(prim_array).cast('B').cast('H')
-        prim_mem[:] = prim_indices
-
-        node = GeomNode('geomnode')
-        geom = Geom(vdata)
-        geom.add_primitive(prim)
-        node.add_geom(geom)
-        return node
+        return vertex_count
 
 
 class SphereGeom(GeomRoot):
@@ -240,11 +244,7 @@ class SphereGeom(GeomRoot):
 
         return self.segments
 
-    # def create_sphere(self, radius, segments):
-    def create_geomnode(self):
-        fmt = self.create_format()
-        vdata_values = array.array('f', [])
-        prim_indices = array.array('H', [])
+    def get_vertices(self, vdata_values, prim_indices):
         vertex_count = 0
 
         # create vertices of the bottom pole, quads, and top pole
@@ -252,45 +252,30 @@ class SphereGeom(GeomRoot):
         vertex_count += self.create_quads(vertex_count, vdata_values, prim_indices)
         vertex_count += self.create_top_pole(vertex_count - self.segments - 1, vdata_values, prim_indices)
 
-        vdata = GeomVertexData('sphere', fmt, Geom.UHStatic)
-        vdata.unclean_set_num_rows(vertex_count)
-        vdata_mem = memoryview(vdata.modify_array(0)).cast('B').cast('f')
-        vdata_mem[:] = vdata_values
-
-        prim = GeomTriangles(Geom.UHStatic)
-        prim_array = prim.modify_vertices()
-        prim_array.unclean_set_num_rows(len(prim_indices))
-        prim_mem = memoryview(prim_array).cast('B').cast('H')
-        prim_mem[:] = prim_indices
-
-        node = GeomNode('geomnode')
-        geom = Geom(vdata)
-        geom.add_primitive(prim)
-        node.add_geom(geom)
-        return node
+        return vertex_count
 
 
 class CubeGeom(GeomRoot):
     """Create a geom node of cube.
         Arges:
-            w (int): width; dimension along the x-axis; cannot be negative;
-            d (int): depth; dimension along the y-axis; cannot be negative;
-            h (int): height; dimension along the z-axis; cannot be negative;
+            w (float): width; dimension along the x-axis; cannot be negative;
+            d (float): depth; dimension along the y-axis; cannot be negative;
+            h (float): height; dimension along the z-axis; cannot be negative;
             segs_w (int) the number of subdivisions in width;
             segs_d (int) the number of subdivisions in depth;
             segs_h (int) the number of subdivisions in height
     """
 
-    def __init__(self, w=1, d=1, h=1, segs_w=2, segs_d=2, segs_h=2):
+    def __init__(self, w=1.0, d=1.0, h=1.0, segs_w=2, segs_d=2, segs_h=2):
         self.w = w
         self.d = d
         self.h = h
-        self.segs_w = 2
-        self.segs_d = 2
-        self.segs_h = 2
+        self.segs_w = segs_w
+        self.segs_d = segs_d
+        self.segs_h = segs_h
         super().__init__()
 
-    def create_sides(self, vdata_values, prim_indices):
+    def get_vertices(self, vdata_values, prim_indices):
         color = (1, 1, 1, 1)
         vertex_count = 0
         vertex = Point3()
@@ -317,48 +302,24 @@ class CubeGeom(GeomRoot):
             normal[i0] = n
             vertex[i0] = dims[i0] * 0.5 * n
 
-            for j in range(segs2 + 1):
-                vertex[i2] = dim2_start + j / segs2
-                v = j / segs2
+            for j in range(segs1 + 1):
+                vertex[i1] = dim1_start + j / segs1 * dims[i1]
+                v = j / segs1
 
-                for k in range(segs1 + 1):
-                    vertex[i1] = dim1_start + k / segs1
-                    u = k / segs1
+                for k in range(segs2 + 1):
+                    vertex[i2] = dim2_start + k / segs2 * dims[i2]
+                    u = k / segs2
                     vdata_values.extend(vertex)
                     vdata_values.extend(color)
                     vdata_values.extend(normal)
                     vdata_values.extend((u, v))
 
                 if j > 0:
-                    for k in range(segs1):
-                        idx = vertex_count + j * (segs1 + 1) + k
-                        prim_indices.extend((idx, idx - segs1 - 1, idx - segs1))
-                        prim_indices.extend((idx, idx - segs1, idx + 1))
+                    for k in range(segs2):
+                        idx = vertex_count + j * (segs2 + 1) + k
+                        prim_indices.extend((idx, idx - segs2 - 1, idx - segs2))
+                        prim_indices.extend((idx, idx - segs2, idx + 1))
 
             vertex_count += (segs1 + 1) * (segs2 + 1)
 
         return vertex_count
-
-    def create_geomnode(self):
-        fmt = self.create_format()
-        vdata_values = array.array('f', [])
-        prim_indices = array.array('H', [])
-
-        vertex_count = self.create_sides(vdata_values, prim_indices)
-
-        vdata = GeomVertexData('cube', fmt, Geom.UHStatic)
-        vdata.unclean_set_num_rows(vertex_count)
-        vdata_mem = memoryview(vdata.modify_array(0)).cast('B').cast('f')
-        vdata_mem[:] = vdata_values
-
-        prim = GeomTriangles(Geom.UHStatic)
-        prim_array = prim.modify_vertices()
-        prim_array.unclean_set_num_rows(len(prim_indices))
-        prim_mem = memoryview(prim_array).cast('B').cast('H')
-        prim_mem[:] = prim_indices
-
-        node = GeomNode('geomnode')
-        geom = Geom(vdata)
-        geom.add_primitive(prim)
-        node.add_geom(geom)
-        return node

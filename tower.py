@@ -10,8 +10,7 @@ from panda3d.core import Quat, Vec3, LColor, BitMask32, Point3
 
 from create_geomnode import CylinderGeom, CubeGeom
 
-# PATH_CYLINDER = "models/cylinder/cylinder"
-PATH_CUBE = 'models/cube/cube'
+
 PATH_TRIANGLE = 'models/trianglular-prism/trianglular-prism'
 
 
@@ -170,8 +169,10 @@ class TwinTower(RegisteredTower):
 
     def __init__(self, rows, foundation, world):
         super().__init__(world, rows, 7, foundation, Point3(0, 0, 1.075))
-        self.cylinder_slim = Cylinder('cylinder_slim', Vec3(0.1, 0.1, 0.15))
-        self.cylinder_wide = Cylinder('cylinder_wide', Vec3(0.25, 0.25, 0.15))
+        self.cylinders = {
+            'normal': Cylinder('slim', Vec3(0.1, 0.1, 0.15)),
+            'wide': Cylinder('wide', Vec3(0.25, 0.25, 0.15))
+        }
 
         self.block_h = 0.15
         diameter = 0.1
@@ -189,22 +190,22 @@ class TwinTower(RegisteredTower):
     def left_tower(self, even, z):
         if even:
             points = self.l_even
-            expand = False
+            cylinder_type = 'normal'
         else:
             points = self.l_odd
-            expand = True
+            cylinder_type = 'wide'
 
         for x, y in points:
             pt = Point3(x, y, z) + self.l_center
-            yield (pt, expand)
+            yield (pt, cylinder_type)
 
     def right_tower(self, even, z):
         points = self.r_even if even else self.r_odd
-        expand = False
+        cylinder_type = 'normal'
 
         for x, y in points:
             pt = Point3(x, y, z) + self.r_center
-            yield (pt, expand)
+            yield (pt, cylinder_type)
 
     def block_position(self, even, z):
         yield from self.left_tower(even, z)
@@ -212,11 +213,10 @@ class TwinTower(RegisteredTower):
 
     def build_tower(self):
         # After a block has been attached to the world, change its mass to 0.
-
         for i in range(self.rows):
             z = self.block_h * i
-            for j, (pt, expand) in enumerate(self.block_position(i % 2 == 0, z)):
-                cylinder = self.cylinder_wide.copy_to(self.blocks) if expand else self.cylinder_slim.copy_to(self.blocks)
+            for j, (pt, cylinder_type) in enumerate(self.block_position(i % 2 == 0, z)):
+                cylinder = self.cylinders[cylinder_type].copy_to(self.blocks)
                 cylinder.set_name(str(i * self.cols + j))
                 cylinder.set_color(Colors.GRAY.rgba)
                 cylinder.set_pos(pt)
@@ -335,8 +335,8 @@ class CubicTower(RegisteredTower):
 
         self.rects = {
             'normal': Cube('normal', Vec3(0.15, 0.15, 0.15)),
-            'short': Cube('short', Vec3(0.099, 0.15, 0.15)),   # Cube('short', Vec3(0.069, 0.15, 0.15)),
-            'large': Cube('large', Vec3(0.219, 0.219, 0.15)),  # Cube('large', Vec3(0.153, 0.153, 0.15)),
+            'short': Cube('short', Vec3(0.099, 0.15, 0.15)),
+            'large': Cube('large', Vec3(0.219, 0.219, 0.15)),
             'long': Cube('long', Vec3(0.223, 0.15, 0.15))
         }
         self.block_h = 0.15
@@ -355,12 +355,11 @@ class CubicTower(RegisteredTower):
         for i in range(self.rows):
             z = self.block_h * i
             pts = self.points[i % 3]
-
             for j, (x, y, rect_type, h) in enumerate(pts):
                 pt = Point3(x * self.edge, y * self.edge, z)
                 rect = self.rects[rect_type].copy_to(self.blocks)
                 rect.set_name(str(i * self.cols + j))
-                rect.set_color(Colors.GRAY.rgba) 
+                rect.set_color(Colors.GRAY.rgba)
                 rect.set_pos(pt)
                 rect.set_h(h)
                 self.attach_block(rect)
@@ -370,62 +369,72 @@ class HShapedTower(RegisteredTower):
 
     level = 30
 
-    # def __init__(self, stories, foundation, world):
-    #     super().__init__(world, stories, foundation, Blocks(10, stories))
     def __init__(self, rows, foundation, world):
         super().__init__(world, rows, 10, foundation, Point3(0, 0, 1.075))
+        self.block_h = 0.15
+        self.edge = 0.075
+        self.rects = {
+            'normal': Cube('normal', Vec3(0.15, 0.075, 0.15)),
+            'large': Cube('large', Vec3(0.1875, 0.075, 0.15))
+        }
 
-        self.block_h = 0.15 # 2.3
-        self.edge = 0.075   # 1.15
-        # (x, y, sx, heading)
         self.even_row = [
-            (-1, 0, 0.7, 0), (-3, 0, 0.7, 0), (1, 0, 0.7, 0), (3, 0, 0.7, 0),
-            (4.5, 0, 0.7, 90), (4.5, 2, 0.7, 90), (4.5, -2, 0.7, -92),
-            (-4.5, 0, 0.7, 90), (-4.5, 2, 0.7, 90), (-4.5, -2, 0.7, -92)]
+            (-1, 0, 'normal', 0), (-3, 0, 'normal', 0), (1, 0, 'normal', 0), (3, 0, 'normal', 0),
+            (4.5, 0, 'normal', 90), (4.5, 2, 'normal', 90), (4.5, -2, 'normal', -92),
+            (-4.5, 0, 'normal', 90), (-4.5, 2, 'normal', 90), (-4.5, -2, 'normal', -92)
+        ]
         self.odd_row = [
-            (0, 0, 0.7, 0), (-2, 0, 0.7, 0), (-4, 0, 0.7, 0), (2, 0, 0.7, 0), (4, 0, 0.7, 0),
-            (4.5, 1.75, 0.875, 90), (4.5, -1.75, 0.875, 90),
-            (-4.5, 1.75, 0.875, 90), (-4.5, -1.75, 0.875, 90)]
+            (0, 0, 'normal', 0), (-2, 0, 'normal', 0), (-4, 0, 'normal', 0), (2, 0, 'normal', 0), (4, 0, 'normal', 0),
+            (4.5, 1.75, 'large', 90), (4.5, -1.75, 'large', 90), (-4.5, 1.75, 'large', 90), (-4.5, -1.75, 'large', 90)
+        ]
 
-    def build(self):
-        for i in range(len(self.blocks)):
-            h = self.block_h * (i + 1)
+    def build_tower(self):
+        for i in range(self.rows):
+            z = self.block_h * i
             cols = self.even_row if not i % 2 else self.odd_row
-            for j, (x, y, sx, heading) in enumerate(cols):
-                color, state = self.get_attrib(i)
-                pos = Point3(x * self.edge, y * self.edge, h) + self.center
-                rect = Rectangle(self, pos, str(i * self.blocks.cols + j), color, state, sx, heading)
-                self.attach_block(state, rect)
-                self.blocks[i][j] = rect
+            for j, (x, y, rect_type, h) in enumerate(cols):
+                pt = Point3(x * self.edge, y * self.edge, z)
+                rect = self.rects[rect_type].copy_to(self.blocks)
+                rect.set_name(str(i * self.cols + j))
+                rect.set_color(Colors.GRAY.rgba)
+                rect.set_pos(pt)
+                rect.set_h(h)
+                self.attach_block(rect)
 
 
-# class CrossTower(RegisteredTower):
+class CrossTower(RegisteredTower):
 
-#     level = 30
+    level = 30
 
-#     def __init__(self, stories, foundation, world):
-#         super().__init__(world, stories, foundation, Blocks(9, stories))
-#         self.block_h = 2.3
-#         self.edge = 2.3
-#         # (x, y, scale, heading)
-#         self.even_row = [
-#             (0, 0, 'normal', 0), (-1, 0, 'normal', 0), (-2, 0, 'normal', 0), (1, 0, 'normal', 0), (2, 0, 'normal', 0),
-#             (0, 1, 'normal', 0), (0, 2, 'normal', 0), (0, -1, 'normal', 0), (0, -2, 'normal', 0)]
-#         self.odd_row = [
-#             (0, 0, 'large', 45), (-1.75, 0, 'long', 0), (1.75, 0, 'long', 0),
-#             (0, -1.75, 'long', 90), (0, 1.75, 'long', 90)]
+    def __init__(self, rows, foundation, world):
+        super().__init__(world, rows, 9, foundation, Point3(0, 0, 1.075))
+        self.block_h = 0.15
+        self.edge = 0.15
 
-#     def build(self):
-#         for i in range(self.blocks.rows):
-#             h = self.block_h * (i + 1)
-#             points = self.even_row if i % 2 == 0 else self.odd_row
+        self.rects = {
+            'normal': Cube('normal', Vec3(0.15, 0.15, 0.15)),
+            'large': Cube('large', Vec3(0.219, 0.219, 0.15)),
+            'long': Cube('long', Vec3(0.223, 0.15, 0.15))
+        }
+        self.even_row = [
+            (0, 0, 'normal', 0), (-1, 0, 'normal', 0), (-2, 0, 'normal', 0), (1, 0, 'normal', 0), (2, 0, 'normal', 0),
+            (0, 1, 'normal', 0), (0, 2, 'normal', 0), (0, -1, 'normal', 0), (0, -2, 'normal', 0)]
+        self.odd_row = [
+            (0, 0, 'large', 45), (-1.75, 0, 'long', 0), (1.75, 0, 'long', 0),
+            (0, -1.75, 'long', 90), (0, 1.75, 'long', 90)]
 
-#             for j, (x, y, scale, heading) in enumerate(points):
-#                 color, state = self.get_attrib(i)
-#                 pt = Point3(x * self.edge, y * self.edge, h) + self.center
-#                 cube = Cube(self, pt, str(i * self.blocks.cols + j), color, state, scale, heading)
-#                 self.attach_block(state, cube)
-#                 self.blocks[i][j] = cube
+    def build_tower(self):
+        for i in range(self.rows):
+            z = self.block_h * i
+            points = self.even_row if i % 2 == 0 else self.odd_row
+            for j, (x, y, rect_type, h) in enumerate(points):
+                pt = Point3(x * self.edge, y * self.edge, z)
+                rect = self.rects[rect_type].copy_to(self.blocks)
+                rect.set_name(str(i * self.cols + j))
+                rect.set_color(Colors.GRAY.rgba)
+                rect.set_pos(pt)
+                rect.set_h(h)
+                self.attach_block(rect)
 
 
 class Cylinder(NodePath):
@@ -455,25 +464,6 @@ class Cube(NodePath):
         self.cube.reparent_to(self)
 
 
-# class Rectangle(NodePath):
-
-#     def __init__(self, root, pos, name, color, state, sx, heading=0):
-#         super().__init__(BulletRigidBodyNode(name))
-#         self.reparentTo(root)
-#         rect = base.loader.loadModel(PATH_CUBE)
-#         rect.reparentTo(self)
-#         end, tip = rect.getTightBounds()
-#         self.node().addShape(BulletBoxShape((tip - end) / 2))
-#         n = 3 if not int(name) % 10 else 4
-#         self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(n))
-#         self.node().setMass(1)
-#         self.setScale(Vec3(sx, 0.35, 0.7))
-#         self.setColor(color)
-#         self.setPos(pos)
-#         self.setH(heading)
-#         self.state = state
-
-
 class TriangularPrism(NodePath):
 
     def __init__(self, root, pos, name, color, state, expand, reverse):
@@ -496,30 +486,3 @@ class TriangularPrism(NodePath):
         prism.setScale(prism_scale)
         prism.reparentTo(self)
         self.state = state
-
-
-# class Cube(NodePath):
-
-#     scales = {
-#         'normal': Vec3(0.7, 0.7, 0.7),
-#         'short': Vec3(0.46, 0.7, 0.7),
-#         'large': Vec3(1.02, 1.02, 0.7),
-#         'long': Vec3(1.04, 0.7, 0.7),
-#     }
-
-#     def __init__(self, root, pos, name, color, state, scale, heading=0):
-#         super().__init__(BulletRigidBodyNode(name))
-#         self.reparentTo(root)
-#         cube = base.loader.loadModel(PATH_CUBE)
-#         cube.reparentTo(self)
-#         end, tip = cube.getTightBounds()
-#         self.node().addShape(BulletBoxShape((tip - end) / 2))
-#         n = 3 if not int(name) % 20 else 4
-#         self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(n))
-#         self.node().setMass(1)
-#         self.setScale(Cube.scales[scale])
-#         self.setColor(color)
-#         self.setPos(pos)
-#         if heading:
-#             self.setH(heading)
-#         self.state = state

@@ -25,14 +25,6 @@ CHECK_REPEAT = 0.2
 WAIT_COUNT = 5
 
 
-class Ball(Enum):
-
-    DELETED = auto()
-    READY = auto()
-    MOVE = auto()
-    MOVING = auto()
-
-
 class Game(Enum):
 
     PLAY = auto()
@@ -124,8 +116,8 @@ class TowerCrash(ShowBase):
         self.click = False
         self.timer = 0
 
-        # tower = towers[self.tower_num]
-        tower = towers[3]
+        tower = towers[self.tower_num]
+        # tower = towers[0]
         self.tower = tower(24, self.scene.foundation, self.world)
         self.tower.build()
 
