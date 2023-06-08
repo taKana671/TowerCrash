@@ -6,12 +6,9 @@ from enum import Enum
 from panda3d.bullet import BulletCylinderShape, BulletBoxShape, BulletConvexHullShape
 from panda3d.bullet import BulletRigidBodyNode
 from panda3d.core import PandaNode, NodePath, TransformState
-from panda3d.core import Quat, Vec3, LColor, BitMask32, Point3
+from panda3d.core import Vec3, LColor, BitMask32, Point3
 
-from create_geomnode import CylinderGeom, CubeGeom
-
-
-PATH_TRIANGLE = 'models/trianglular-prism/trianglular-prism'
+from create_geomnode import CylinderGeom, CubeGeom, TriangularPrismGeom
 
 
 towers = []
@@ -170,7 +167,7 @@ class TwinTower(RegisteredTower):
     def __init__(self, rows, foundation, world):
         super().__init__(world, rows, 7, foundation, Point3(0, 0, 1.075))
         self.cylinders = {
-            'normal': Cylinder('slim', Vec3(0.1, 0.1, 0.15)),
+            'normal': Cylinder('normal', Vec3(0.1, 0.1, 0.15)),
             'wide': Cylinder('wide', Vec3(0.25, 0.25, 0.15))
         }
 
@@ -290,40 +287,50 @@ class CylinderTower(RegisteredTower):
                 self.attach_block(cylinder)
 
 
-# class TripleTower(RegisteredTower):
+class TripleTower(RegisteredTower):
 
-#     level = 35
+    level = 35
 
-#     def __init__(self, stories, foundation, world):
-#         super().__init__(world, stories, foundation, Blocks(12, stories))
-#         self.block_h = 2.2  # 2.23
-#         self.first_h = 2.46
-#         self.centers = [Point3(-2, 8, 1.0), Point3(1.5, 13, 1.0), Point3(-5, 14, 1.0)]
-#         edge = 2.536
-#         half = edge / 2
-#         ok = edge / 2 / math.sqrt(3)  # 0.7320801413324455
-#         self.even_row = [(0, 0)]
-#         self.odd_row = [(0, 0), (half, -ok), (-half, -ok), (0, ok * 2)]
+    def __init__(self, rows, foundation, world):
+        super().__init__(world, rows, 12, foundation, Point3(0, 0, 1.075))
 
-#     def build(self):
-#         for i in range(self.blocks.rows):
-#             h = i * self.block_h + self.first_h
+        self.prisms = {
+            'normal': TriangularPrism('normal', Vec3(0.15, 0.15, 0.15)),
+            'wide': TriangularPrism('wide', Vec3(0.3, 0.3, 0.15))
+        }
 
-#             if i % 2 == 0:
-#                 points = self.even_row
-#                 expand = True
-#             else:
-#                 points = self.odd_row
-#                 expand = False
+        self.block_h = 0.15  # 2.2  # 2.23
+        self.centers = [Point3(0, 0.2, 0), Point3(-0.18, -0.2, 0), Point3(0.18, -0.2, 0)]
 
-#             for j, (center, (x, y)) in enumerate(itertools.product(self.centers, points)):
-#                 color, state = self.get_attrib(i)
-#                 pt = Point3(x, y, h) + center
-#                 reverse = True if i % 2 and not j % 4 else False
-#                 triangle = TriangularPrism(
-#                     self, pt, str(i * self.blocks.cols + j), color, state, expand, reverse)
-#                 self.attach_block(state, triangle)
-#                 self.blocks[i][j] = triangle
+        edge = 0.15  # 2.536
+        half = edge / 2
+        ok = edge / 2 / math.sqrt(3)
+
+        self.even_row = [(0, 0)]
+        self.odd_row = [(0, 0), (half, -ok), (-half, -ok), (0, ok * 2)]
+
+    def build_tower(self):
+        for i in range(self.rows):
+            z = i * self.block_h
+
+            if i % 2 == 0:
+                points = self.even_row
+                prism_type = 'wide'
+            else:
+                points = self.odd_row
+                prism_type = 'normal'
+
+            for j, (center, (x, y)) in enumerate(itertools.product(self.centers, points)):
+                prism = self.prisms[prism_type].copy_to(self.blocks)
+                prism.set_name(str(i * self.cols + j))
+                prism.set_color(Colors.GRAY.rgba)
+                pos = Point3(x, y, z) + center
+
+                if i % 2 and not j % 4:
+                    prism.set_h(180)
+
+                prism.set_pos(pos)
+                self.attach_block(prism)
 
 
 class CubicTower(RegisteredTower):
@@ -466,23 +473,15 @@ class Cube(NodePath):
 
 class TriangularPrism(NodePath):
 
-    def __init__(self, root, pos, name, color, state, expand, reverse):
+    def __init__(self, name, scale):
         super().__init__(BulletRigidBodyNode(name))
-        self.reparentTo(root)
-        prism = base.loader.loadModel(PATH_TRIANGLE)
-        geom_scale = Vec3(1.4, 0.7, 1.4) if expand else 0.7
-        geom = prism.findAllMatches('**/+GeomNode').getPath(0).node().getGeom(0)
+        self.prism = TriangularPrismGeom()
         shape = BulletConvexHullShape()
-        shape.addGeom(geom, TransformState.makeScale(geom_scale))
-        self.node().setMass(1.0)
-        self.node().addShape(shape)
-        n = 3 if int(name) % 20 == 0 else 4
-        self.setCollideMask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(n))
-        hpr = Vec3(180, -90, 0) if reverse else Vec3(0, -90, 0)
-        self.setHpr(hpr)
-        self.setPos(pos)
-        self.setColor(color)
-        prism_scale = Vec3(0.44, 0.22, 0.44) if expand else 0.22
-        prism.setScale(prism_scale)
-        prism.reparentTo(self)
-        self.state = state
+        geom = self.prism.node().get_geom(0)
+        shape.add_geom(geom, TransformState.makeScale(scale * 0.98))
+
+        self.node().add_shape(shape)
+        self.set_collide_mask(BitMask32.bit(1) | BitMask32.bit(2) | BitMask32.bit(4))
+        self.node().set_mass(1)
+        self.prism.set_scale(scale)
+        self.prism.reparent_to(self)

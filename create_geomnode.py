@@ -62,6 +62,7 @@ class CylinderGeom(GeomRoot):
         self.segs_c = segs_c
         self.height = height
         self.segs_a = segs_a
+        self.color = (1, 1, 1, 1)
         super().__init__()
 
     def cap_vertices(self, delta_angle, bottom=True):
@@ -83,12 +84,11 @@ class CylinderGeom(GeomRoot):
 
     def create_bottom_cap(self, delta_angle, vdata_values, prim_indices):
         normal = (0, 0, -1)
-        color = (1, 1, 1, 1)
 
         # bottom cap center and triangle vertices
         for vertex, uv in self.cap_vertices(delta_angle, bottom=True):
             vdata_values.extend(vertex)
-            vdata_values.extend(color)
+            vdata_values.extend(self.color)
             vdata_values.extend(normal)
             vdata_values.extend(uv)
 
@@ -114,7 +114,7 @@ class CylinderGeom(GeomRoot):
                 normal = Vec3(x, y, 0.0).normalized()
                 u = j / self.segs_c
                 vdata_values.extend((x, y, z))
-                vdata_values.extend((1, 1, 1, 1))
+                vdata_values.extend(self.color)
                 vdata_values.extend(normal)
                 vdata_values.extend((u, v))
 
@@ -131,12 +131,11 @@ class CylinderGeom(GeomRoot):
 
     def create_top_cap(self, index_offset, delta_angle, vdata_values, prim_indices):
         normal = (0, 0, 1)
-        color = (1, 1, 1, 1)
 
         # top cap center and triangle vertices
         for vertex, uv in self.cap_vertices(delta_angle, bottom=False):
             vdata_values.extend(vertex)
-            vdata_values.extend(color)
+            vdata_values.extend(self.color)
             vdata_values.extend(normal)
             vdata_values.extend(uv)
 
@@ -169,18 +168,18 @@ class SphereGeom(GeomRoot):
     def __init__(self, radius=1.5, segments=22):
         self.radius = radius
         self.segments = segments
+        self.color = (1, 1, 1, 1)
         super().__init__()
 
     def create_bottom_pole(self, vdata_values, prim_indices):
         # the bottom pole vertices
         normal = (0.0, 0.0, -1.0)
         vertex = (0.0, 0.0, -self.radius)
-        color = (1, 1, 1, 1)
 
         for i in range(self.segments):
             u = i / self.segments
             vdata_values.extend(vertex)
-            vdata_values.extend(color)
+            vdata_values.extend(self.color)
             vdata_values.extend(normal)
             vdata_values.extend((u, 0.0))
 
@@ -191,7 +190,6 @@ class SphereGeom(GeomRoot):
 
     def create_quads(self, index_offset, vdata_values, prim_indices):
         delta_angle = 2 * math.pi / self.segments
-        color = (1, 1, 1, 1)
         vertex_count = 0
 
         # the quad vertices
@@ -211,7 +209,7 @@ class SphereGeom(GeomRoot):
                 u = j / self.segments
 
                 vdata_values.extend((x, y, z))
-                vdata_values.extend(color)
+                vdata_values.extend(self.color)
                 vdata_values.extend(normal)
                 vdata_values.extend((u, v))
 
@@ -228,13 +226,12 @@ class SphereGeom(GeomRoot):
     def create_top_pole(self, index_offset, vdata_values, prim_indices):
         vertex = (0.0, 0.0, self.radius)
         normal = (0.0, 0.0, 1.0)
-        color = (1, 1, 1, 1)
 
         # the top pole vertices
         for i in range(self.segments):
             u = i / self.segments
             vdata_values.extend(vertex)
-            vdata_values.extend(color)
+            vdata_values.extend(self.color)
             vdata_values.extend(normal)
             vdata_values.extend((u, 1.0))
 
@@ -273,10 +270,10 @@ class CubeGeom(GeomRoot):
         self.segs_w = segs_w
         self.segs_d = segs_d
         self.segs_h = segs_h
+        self.color = (1, 1, 1, 1)
         super().__init__()
 
     def get_vertices(self, vdata_values, prim_indices):
-        color = (1, 1, 1, 1)
         vertex_count = 0
         vertex = Point3()
         segs = (self.segs_w, self.segs_d, self.segs_h)
@@ -310,10 +307,9 @@ class CubeGeom(GeomRoot):
                     vertex[i2] = dim2_start + k / segs2 * dims[i2]
                     u = k / segs2
                     vdata_values.extend(vertex)
-                    vdata_values.extend(color)
+                    vdata_values.extend(self.color)
                     vdata_values.extend(normal)
                     vdata_values.extend((u, v))
-
                 if j > 0:
                     for k in range(segs2):
                         idx = vertex_count + j * (segs2 + 1) + k
@@ -321,5 +317,105 @@ class CubeGeom(GeomRoot):
                         prim_indices.extend((idx, idx - segs2, idx + 1))
 
             vertex_count += (segs1 + 1) * (segs2 + 1)
+
+        return vertex_count
+
+
+class TriangularPrismGeom(GeomRoot):
+    """Create a geom node of cube.
+        Arges:
+            side (float) : side of triangle; cannot be negative;
+            h (float): height; dimension along the z-axis; cannot be negative;
+            segs_h (int) the number of subdivisions in height
+    """
+
+    def __init__(self, side=1.0, h=1.0, segs_h=2):
+        self.side = side
+        self.h = h
+        self.segs_h = segs_h
+        self.color = (1, 1, 1, 1)
+        super().__init__()
+
+    def create_caps(self, points, index_offset, vdata_values, prim_indices):
+        vertex_count = 0
+        normal = (0, 0, 1) if all(pt.z > 0 for pt in points) else (0, 0, -1)
+        v = 0
+
+        for i, pt in enumerate(points):
+            u = i / (len(points) - 1)
+            vdata_values.extend(pt)
+            vdata_values.extend(self.color)
+            vdata_values.extend(normal)
+            vdata_values.extend((u, v))
+            vertex_count += 1
+
+        prim_indices.extend((index_offset, index_offset + 2, index_offset + 1))
+
+        return vertex_count
+
+    def create_sides(self, sides, index_offset, vdata_values, prim_indices):
+        vertex_count = 0
+        vertex = Point3()
+        segs_u = len(sides)
+
+        for a, pts in enumerate(sides):
+            pts_cnt = len(pts)
+
+            if pts[0].y < 0 and pts[1].y < 0:
+                normal = (0, -1, 0)
+            elif pts[0].x > 0:
+                normal = (1, 0, 0)
+            elif pts[1].x < 0:
+                normal = (-1, 0, 0)
+
+            for i in range(self.segs_h + 1):
+                v = i / self.segs_h
+                vertex.z = -self.h / 2 + i / self.segs_h * self.h
+
+                for j in range(pts_cnt):
+                    pt = pts[j]
+                    vertex.x, vertex.y = pt.x, pt.y
+                    u = (a + j) / segs_u
+
+                    vdata_values.extend(vertex)
+                    vdata_values.extend(self.color)
+                    vdata_values.extend(normal)
+                    vdata_values.extend((u, v))
+                    vertex_count += 1
+
+                if i > 0:
+                    idx = index_offset + i * (1 + 1)
+                    prim_indices.extend((idx, idx - 2, idx - 1))
+                    prim_indices.extend((idx, idx - 1, idx + 1))
+
+            index_offset += pts_cnt * (self.segs_h + 1)
+
+        return vertex_count
+
+    def get_vertices(self, vdata_values, prim_indices):
+        half_s = self.side / 2
+        half_h = self.h / 2
+
+        top = [
+            Point3(0, half_s / math.sqrt(3) * 2, half_h),
+            Point3(-half_s, -half_s / math.sqrt(3), half_h),
+            Point3(half_s, -half_s / math.sqrt(3), half_h)
+        ]
+        bottom = [
+            Point3(0, half_s / math.sqrt(3) * 2, -half_h),
+            Point3(-half_s, -half_s / math.sqrt(3), -half_h),
+            Point3(half_s, -half_s / math.sqrt(3), -half_h)
+        ]
+
+        sides = [
+            (bottom[1], bottom[2]),
+            (bottom[2], bottom[0]),
+            (bottom[0], bottom[1]),
+        ]
+
+        vertex_count = 0
+        vertex_count += self.create_caps(top, vertex_count, vdata_values, prim_indices)
+        vertex_count += self.create_sides(sides, vertex_count, vdata_values, prim_indices)
+        vertex_count += self.create_caps(bottom, vertex_count, vdata_values, prim_indices)
 
         return vertex_count

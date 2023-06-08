@@ -124,19 +124,26 @@ class Scene(NodePath):
         self.bottom.reparent_to(self)
         world.attach(self.bottom.node())
 
-        self.create_water()
-        # self.create_fog()
+        # self.create_water()
+        # self.generate_fog()
+        self.create_fog()
 
         # self.reparent_to(base.render)
 
     def create_fog(self):
         fog = Fog("fog")
         fog.set_mode(Fog.MExponentialSquared)
-        # fog.set_color(128/255.0, 128/255.0, 128/255.0)
-        color = (0.8, 0.8, 0.8)
-        fog.set_color(*color)
+        fog.set_color(128/255.0, 128/255.0, 128/255.0)
         fog.set_exp_density(0.013)
-        base.render.set_fog(fog)
+        render.set_fog(fog)
+
+        # fog = Fog("fog")
+        # fog.set_mode(Fog.MExponentialSquared)
+        # # fog.set_color(128/255.0, 128/255.0, 128/255.0)
+        # color = (0.8, 0.8, 0.8)
+        # fog.set_color(*color)
+        # fog.set_exp_density(0.013)
+        # base.render.set_fog(fog)
 
         # pass
         # self.fog0color=(0.66,0.75,0.85,1.0)
@@ -183,7 +190,7 @@ class Scene(NodePath):
         self.water_plane.set_pos(Point3(-127.5, -127.5, 0))
         self.water_plane.flatten_strong()
         self.water_plane.set_shader(Shader.load(Shader.SL_GLSL, 'water_v.glsl', 'water_f.glsl'))
-        
+
         # self.water_plane.set_shader(Shader.load(Shader.SL_GLSL, 'fog_v.glsl', 'fog_f.glsl'))
         self.water_plane.set_shader_input('size', size)
         self.water_plane.set_shader_input('normal_map', base.loader.load_texture('normal.png'))
@@ -207,7 +214,6 @@ class Scene(NodePath):
         self.water_camera.node().set_lens(base.camLens)
         self.water_camera.node().set_camera_mask(BitMask32.bit(1))
 
-
         reflect_tex = self.water_buffer.get_texture()
         reflect_tex.set_wrap_u(Texture.WMClamp)
         reflect_tex.set_wrap_v(Texture.WMClamp)
@@ -223,6 +229,56 @@ class Scene(NodePath):
         self.water_plane.set_shader_input('camera', self.water_camera)
         self.water_plane.set_shader_input('reflection', reflect_tex)
         # self.water_plane.set_shader_input('u_resolution', self.water_buffer.get_size())
+
+
+    def generate_fog(self):
+        size = 512  # size of the wave buffer
+        cm = CardMaker('plane')
+        cm.set_frame(0, 256, 0, 256)
+        self.fog_plane = base.render.attach_new_node(cm.generate())
+        self.fog_plane.look_at(0, -1, 1)
+
+        # pos = self.terrain.get_pos()
+        # pos.z = -3
+        # print(pos)
+        self.fog_plane.set_pos(Point3(-127.5, -127.5, 0))
+        self.fog_plane.flatten_strong()
+        self.fog_plane.set_shader(Shader.load(Shader.SL_GLSL, "fog_v.glsl", "fog_f.glsl"))
+        
+        self.fog_buffer = base.win.make_texture_buffer('fog', 512, 512)
+        self.fog_buffer.set_clear_color(base.win.get_clear_color())
+        self.fog_buffer.set_sort(-1)
+
+        self.fog_camera = base.make_camera(self.fog_buffer)
+        self.fog_camera.reparent_to(base.render)
+        self.fog_camera.node().set_lens(base.camLens)
+        self.fog_camera.node().set_camera_mask(BitMask32.bit(1))
+
+
+
+        self.fog_plane.set_shader_input("pi", LVecBase2f(3.14, 10))
+        self.fog_plane.set_shader_input("gamma", LVecBase2f(2.2, 0.45))
+        self.fog_plane.set_shader_input("backgroundColor0", LColor(0.392, 0.537, 0.561, 1))
+        self.fog_plane.set_shader_input("backgroundColor1", LColor(0.953, 0.733, 0.525, 1))
+        self.fog_plane.set_shader_input("positionTexture0", self.fog_buffer.get_texture(0))
+        self.fog_plane.set_shader_input("positionTexture1", self.fog_buffer.get_texture())
+        self.fog_plane.set_shader_input("smokeMaskTexture", self.fog_buffer.get_texture())
+        self.fog_plane.set_shader_input("sunPosition", LVecBase2f(0.5, 0))
+        self.fog_plane.set_shader_input("origin", Point3(0, 0, 0))
+        self.fog_plane.set_shader_input("nearFar", LVecBase2f(2.0, 9.0))
+        self.fog_plane.set_shader_input("enabled", True)
+
+
+
+
+        # self.water_buffer = base.win.make_texture_buffer('water', 512, 512)
+        # self.water_buffer.set_clear_color(base.win.get_clear_color())
+        # self.water_buffer.set_sort(-1)
+
+        # self.water_camera = base.make_camera(self.water_buffer)
+        # self.water_camera.reparent_to(base.render)
+        # self.water_camera.node().set_lens(base.camLens)
+        # self.water_camera.node().set_camera_mask(BitMask32.bit(1))
 
 
 

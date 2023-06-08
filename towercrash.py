@@ -117,7 +117,7 @@ class TowerCrash(ShowBase):
         self.timer = 0
 
         tower = towers[self.tower_num]
-        # tower = towers[0]
+        tower = towers[3]
         self.tower = tower(24, self.scene.foundation, self.world)
         self.tower.build()
 
@@ -215,7 +215,7 @@ class TowerCrash(ShowBase):
 
     def update(self, task):
         dt = globalClock.getDt()
-        self.scene.water_camera.setMat(self.cam.getMat(self.render) * self.scene.clip_plane.getReflectionMat())
+        # self.scene.water_camera.setMat(self.cam.getMat(self.render) * self.scene.clip_plane.getReflectionMat())
 
         if self.state == Game.START:
             if not self.moveup_camera(dt):
