@@ -55,7 +55,7 @@ class Tower(NodePath):
         self.cols = columns
         self.foundation = foundation
         self.world = world
-
+        # index
         self.tower_top = self.rows - 1
         self.inactive_top = self.rows - 9
 
@@ -69,12 +69,14 @@ class Tower(NodePath):
 
     def build(self):
         self.build_tower()
-
         # Activate blocks in 8 rows from the top.
         for r in range(self.tower_top, self.inactive_top, -1):
             for block in self.find_blocks(r):
                 self.activate(block)
-                self.floater.set_z(block.get_z())
+
+        block = next(self.find_blocks(self.inactive_top))
+        self.floater.set_z(block.get_z() - self.block_h)
+        # self.floater.set_z(block.get_z())
 
     def attach_block(self, block):
         self.world.attach(block.node())

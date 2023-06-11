@@ -1,21 +1,18 @@
 import sys
 from enum import Enum, auto
 
-from direct.gui.DirectGui import OnscreenText, Plain, OnscreenImage, DirectButton
-from direct.interval.IntervalGlobal import Sequence, Parallel, Func, Wait
+from direct.gui.DirectGui import OnscreenText, Plain
 from direct.showbase.ShowBaseGlobal import globalClock
 from direct.showbase.ShowBase import ShowBase
 from panda3d.bullet import BulletWorld, BulletDebugNode
-from panda3d.core import PandaNode, NodePath, TextNode, TransparencyAttrib, Shader, load_prc_file_data
-from panda3d.core import Vec3, LColor, BitMask32, Point3, Quat, CardMaker
-
-from direct.showbase.InputStateGlobal import inputState
-
+from panda3d.core import NodePath, TextNode, TransparencyAttrib
+from panda3d.core import Shader, load_prc_file_data
+from panda3d.core import Vec3, BitMask32, Point3, CardMaker
 
 from balls import ColorBall
 from lights import BasicAmbientLight, BasicDayLight
 from scene import Scene
-from tower import towers, Colors
+from tower import towers
 
 
 load_prc_file_data("", """
@@ -27,21 +24,16 @@ load_prc_file_data("", """
     stm-max-chunk-count 2048""")
 
 
-PATH_START_SCREEN = 'images/start.png'
-CHECK_REPEAT = 0.2
-WAIT_COUNT = 5
-
-
 class Game(Enum):
 
-    PLAY = auto()
-    GAMEOVER = auto()
+    INITIALIZE = auto()
+    READY = auto()
     START = auto()
-    CLEAR = auto()
+    PLAY = auto()
     THROW = auto()
-
     HIT = auto()
-    SETUP = auto()
+    JUDGE = auto()
+    GAMEOVER = auto()
 
 
 class BallNumberDisplay(OnscreenText):
@@ -62,10 +54,14 @@ class TowerCrash(ShowBase):
         super().__init__()
         self.disable_mouse()
         self.camera_lowest_z = 2.5
+        self.wait_count = 5
         self.tower_num = 0
 
         self.world = BulletWorld()
         self.world.set_gravity(Vec3(0, 0, -9.81))
+
+        self.debug = self.render.attach_new_node(BulletDebugNode('debug'))
+        self.world.set_debug_node(self.debug.node())
 
         self.ambient_light = BasicAmbientLight()
         self.directional_light = BasicDayLight()
@@ -76,29 +72,12 @@ class TowerCrash(ShowBase):
         self.navigator.reparent_to(self.render)
         self.camera.reparent_to(self.navigator)
 
-        # self.camera.setPos(0, -20, 0)  # 20, -20, 5
-
-        # # self.camera.set_pos_hpr(Point3(54, -138, 24), Vec3(0, -34.992, 0))
-        # self.camera.lookAt(0, 0, 0)  # 5, 0, 3
-
-
         self.ball = ColorBall(self.world)
-
-        self.start_screen = StartScreen()
         self.ball_number_display = BallNumberDisplay()
 
-        self.debug = self.render.attach_new_node(BulletDebugNode('debug'))
-        self.world.set_debug_node(self.debug.node())
-
-        # self.set_color_gradient()
         self.start_screen = StartScreen()
         self.start_screen.set_up()
-        # self.taskMgr.do_method_later(3, self.initialize_game, 'initialization')
-
-        self.state = Game.SETUP
-        # self.initialize_game()
-
-        # self.camera.set_p(-5)
+        self.state = Game.INITIALIZE
 
         self.accept('z', self.test_move_camera, ['z', 'up'])
         self.accept('shift-z', self.test_move_camera, ['z', 'down'])
@@ -117,37 +96,8 @@ class TowerCrash(ShowBase):
         self.accept('d', self.toggle_debug)
         self.accept('mouse1', self.mouse_click)
         self.accept('mouse1-up', self.mouse_release)
+
         self.taskMgr.add(self.update, 'update')
-
-    # def set_color_gradient(self):
-    #     cm = CardMaker('gradient')
-    #     cm.set_frame(0, 256, 0, 256)
-    #     self.color_plane = NodePath(cm.generate())
-
-    #     self.color_plane.reparent_to(self.render)
-
-    #     self.color_plane.look_at(0, 1, 0)
-    #     self.color_plane.set_transparency(TransparencyAttrib.MAlpha)
-    #     # self.color_plane.set_pos(Point3(-128, -128, -2))
-
-    #     self.color_plane.set_pos(Point3(-128, -50, 0))
-        
-        
-    #     self.color_plane.flatten_strong()
-    #     self.color_plane.set_shader(
-    #         Shader.load(Shader.SL_GLSL, 'shaders/color_gradient_v.glsl', 'shaders/color_gradient_f.glsl'))
-    #     props = self.win.get_properties()
-    #     self.color_plane.set_shader_input('u_resolution', props.get_size())
-    #     self.color_plane.set_shader_input('a', 1.0)
-
-    #     self.color_buffer = self.win.make_texture_buffer('gradieng', 512, 512)
-    #     self.color_buffer.set_clear_color(self.win.get_clear_color())
-    #     self.color_buffer.set_sort(-1)
-
-    #     self.color_camera = self.make_camera(self.color_buffer)
-    #     self.color_camera.reparent_to(self.render)
-    #     self.color_camera.node().set_lens(self.camLens)
-    #     self.color_camera.node().set_camera_mask(BitMask32.bit(1))
 
     def toggle_debug(self):
         if self.debug.is_hidden():
@@ -156,36 +106,25 @@ class TowerCrash(ShowBase):
             self.debug.hide()
 
     def initialize_game(self):
-        # self.start_screen.reparentTo(self.aspect2d)
         self.state = None
-        self.descent_distance = 0
-        self.gradient = 1.0
-
         self.dragging = 0
         self.click = False
-        self.timer = 0
 
         tower = towers[self.tower_num]
-        # tower = towers[3]
+        # tower = towers[1]
         self.tower = tower(24, self.scene.foundation, self.world)
         self.tower.build()
 
         self.camera_highest_z = self.tower.floater.get_z(self.render)
         self.navigator.set_pos_hpr(Point3(0, 0, self.camera_lowest_z), Vec3(0, 0, 0))
-        self.camera.set_pos(0, -70, 0)  # -64
+        self.camera.set_pos(0, -70, 0)  # -64 70
         self.camera.look_at(0, 0, self.camera_lowest_z + 4 * 2.5)
 
         self.ball.initialize(self.tower)
         self.ball_cnt = self.tower.level
 
-        # self.color_plane.reparent_to(self.render)
-        # self.start_screen.set_up()
-
-        self.state = Game.SETUP
-
-
     def setup_ball(self):
-        start_pos = Point3(0, -60, 0)
+        start_pos = Point3(0, -60, 0)  # -60
         # normal = True if self.ball_cnt >= 15 else False
         normal = False
         self.ball.setup(start_pos, self.navigator, normal)
@@ -193,7 +132,7 @@ class TowerCrash(ShowBase):
         # show the number of throwing a ball.
         self.ball_number_display.reparent_to(self.aspect2d)
         self.ball_number_display.setText(str(self.ball_cnt))
-    
+
     def moveup_camera(self, dt):
         angle = dt * 100
         vertical_distance = 15 * dt
@@ -252,33 +191,21 @@ class TowerCrash(ShowBase):
         if self.navigator.get_z() > self.camera_lowest_z:
             distance = 10 * dt
             self.navigator.set_z(self.navigator.get_z() - distance)
-    
+
     def game_start(self, task):
-        
+        self.state = Game.READY
+        return task.done
 
     def game_over(self, task):
-        # if self.tower.tower_top <= 0:
         if self.tower.tower_top <= 1:
             self.tower_num += 1
         if self.tower_num >= len(towers):
             self.tower_num = 0
 
         self.tower.remove_all_blocks()
-        self.initialize_game()
-        self.state = Game.SETUP
+        self.state = Game.INITIALIZE
 
         return task.done
-
-    def color_gradient(self, dt):
-        if self.gradient == 0.0:
-            return True
-        
-        self.gradient -= dt * 0.1
-        if self.gradient < 0.0:
-            self.gradient = 0.0
-        
-        self.color_plane.set_shader_input('a', self.gradient)
-
 
     def clean_sea_bottom(self):
         for con in self.world.contact_test(self.scene.bottom.node()).get_contacts():
@@ -289,62 +216,65 @@ class TowerCrash(ShowBase):
         dt = globalClock.getDt()
         self.scene.water_camera.setMat(self.cam.getMat(self.render) * self.scene.clip_plane.getReflectionMat())
 
-        if self.state == Game.SETUP:
-            if self.start_screen.disappear(dt):
-                self.start_screen.tear_down()
-                self.state = Game.START
+        match self.state:
+            case Game.INITIALIZE:
+                self.initialize_game()
+                self.taskMgr.do_method_later(3, self.game_start, 'game_start')
 
-        if self.state == Game.START:
-            if not self.moveup_camera(dt):
-                self.setup_ball()
-                self.state = Game.PLAY
+            case Game.READY:
+                if self.start_screen.disappear(dt):
+                    self.start_screen.tear_down()
+                    self.state = Game.START
 
-        if self.state == Game.GAMEOVER:
-            if self.start_screen.appear(dt):
-                # self.tower.remove_all_blocks()
-                self.state = None
-                self.taskMgr.do_method_later(3, self.game_over, 'gameover')
-                # self.initialize_game()
-                # self.state = Game.SETUP
+            case Game.START:
+                if not self.moveup_camera(dt):
+                    self.setup_ball()
+                    self.state = Game.PLAY
 
-        if self.state == Game.PLAY:
-            if self.mouseWatcherNode.has_mouse():
-                mouse_pos = self.mouseWatcherNode.get_mouse()
+            case Game.GAMEOVER:
+                if self.start_screen.appear(dt):
+                    self.state = None
+                    self.taskMgr.do_method_later(3, self.game_over, 'gameover')
 
-                if self.click:
-                    if self.choose_block(mouse_pos):
-                        self.ball_number_display.detach_node()
-                        self.ball_cnt -= 1
-                        self.state = Game.THROW
-                    else:
-                        self.mouse_x = 0
-                        self.dragging = globalClock.get_frame_count() + WAIT_COUNT
-                    self.click = False
+            case Game.PLAY:
+                if self.mouseWatcherNode.has_mouse():
+                    mouse_pos = self.mouseWatcherNode.get_mouse()
 
-                if 0 < self.dragging <= globalClock.get_frame_count():
-                    self.rotate_camera(mouse_pos.x, dt)
-                    self.mouse_x = mouse_pos.x
+                    if self.click:
+                        if self.choose_block(mouse_pos):
+                            self.ball_number_display.detach_node()
+                            self.ball_cnt -= 1
+                            self.state = Game.THROW
+                        else:
+                            self.mouse_x = 0
+                            self.dragging = globalClock.get_frame_count() + self.wait_count
+                        self.click = False
 
-            self.tower.update()
+                    if 0 < self.dragging <= globalClock.get_frame_count():
+                        self.rotate_camera(mouse_pos.x, dt)
+                        self.mouse_x = mouse_pos.x
 
-            if self.navigator.get_z() > self.tower.floater.get_z(self.render):
-                self.move_down_camera(dt)
+            case Game.THROW:
+                if not self.ball.move(dt):
+                    self.state = Game.HIT
 
-        if self.state == Game.THROW:
-            if not self.ball.move(dt):
-                self.state = Game.HIT
+            case Game.HIT:
+                self.ball.hit()
+                self.state = Game.JUDGE
 
-        if self.state == Game.HIT:
-            self.ball.hit()
-            if self.ball_cnt > 0:
-                self.setup_ball()
-                self.state = Game.PLAY
+            case Game.JUDGE:
+                if self.ball_cnt > 0 and self.tower.tower_top > 1:
+                    self.setup_ball()
+                    self.state = Game.PLAY
+                else:
+                    self.start_screen.set_up()
+                    self.state = Game.GAMEOVER
 
-        if self.tower.tower_top <= 1 or self.ball_cnt == 0:
-            self.start_screen.set_up()
-            self.state = Game.GAMEOVER
-
+        self.tower.update()
         self.clean_sea_bottom()
+
+        if self.navigator.get_z() > self.tower.floater.get_z(self.render):
+            self.move_down_camera(dt)
 
         self.world.do_physics(dt)
         return task.cont
@@ -407,16 +337,17 @@ class StartScreen:
         cm = CardMaker('gradient')
         cm.set_frame(0, 256, 0, 256)
         self.color_plane = NodePath(cm.generate())
-        # self.color_plane.reparent_to(base.render)
         self.color_plane.look_at(0, 1, 0)
         self.color_plane.set_transparency(TransparencyAttrib.MAlpha)
         self.color_plane.set_pos(Point3(-128, -50, 0))  # Point3(-128, -128, -2)
         self.color_plane.flatten_strong()
+
         self.color_plane.set_shader(
-            Shader.load(Shader.SL_GLSL, 'shaders/color_gradient_v.glsl', 'shaders/color_gradient_f.glsl'))
+            Shader.load(Shader.SL_GLSL, 'shaders/color_gradient_v.glsl', 'shaders/color_gradient_f.glsl')
+        )
         props = base.win.get_properties()
         self.color_plane.set_shader_input('u_resolution', props.get_size())
-        self.color_plane.set_shader_input('a', self.alpha)
+        self.color_plane.set_shader_input('alpha', self.alpha)
 
     def create_color_camera(self):
         self.color_buffer = base.win.make_texture_buffer('gradieng', 512, 512)
@@ -424,7 +355,6 @@ class StartScreen:
         self.color_buffer.set_sort(-1)
 
         self.color_camera = base.make_camera(self.color_buffer)
-        # self.color_camera.reparent_to(base.render)
         self.color_camera.node().set_lens(base.camLens)
         self.color_camera.node().set_camera_mask(BitMask32.bit(1))
 
@@ -444,7 +374,7 @@ class StartScreen:
         if self.alpha > 1.0:
             self.alpha = 1.0
 
-        self.color_plane.set_shader_input('a', self.alpha)
+        self.color_plane.set_shader_input('alpha', self.alpha)
 
     def disappear(self, dt):
         if self.alpha == 0.0:
@@ -454,38 +384,7 @@ class StartScreen:
         if self.alpha < 0.0:
             self.alpha = 0.0
 
-        self.color_plane.set_shader_input('a', self.alpha)
-
-
-
-# class StartScreen(NodePath):
-
-#     def __init__(self, game):
-#         super().__init__(PandaNode('startScreen'))
-#         self.screen = OnscreenImage(
-#             image=PATH_START_SCREEN,
-#             parent=self,
-#             scale=(1.5, 1, 1),
-#             pos=(0, 0, 0)
-#         )
-#         self.button = DirectButton(
-#             pos=(0, 0, 0),
-#             scale=0.1,
-#             parent=self,
-#             frameSize=(-2, 2, -0.7, 0.7),
-#             frameColor=(0.75, 0.75, 0.75, 1),
-#             text="start",
-#             text_pos=(0, -0.3),
-#             command=self.click
-#         )
-#         self.game = game
-
-#     def _start(self):
-#         self.game.state = Game.START
-
-#     def click(self):
-#         self.detachNode()
-#         Sequence(Wait(0.5), Func(self._start)).start()
+        self.color_plane.set_shader_input('alpha', self.alpha)
 
 
 if __name__ == '__main__':
