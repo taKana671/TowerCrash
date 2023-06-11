@@ -1,6 +1,5 @@
-from direct.showbase.ShowBase import ShowBase
 from panda3d.bullet import BulletRigidBodyNode
-from panda3d.bullet import BulletPlaneShape, BulletCylinderShape, BulletConvexHullShape
+from panda3d.bullet import BulletPlaneShape, BulletConvexHullShape
 from panda3d.core import Vec3, Point3, LColor, BitMask32, LVecBase2f
 from panda3d.core import PandaNode, NodePath, TransparencyAttrib
 
@@ -20,13 +19,13 @@ from panda3d.core import PNMImage
 from create_geomnode import CylinderGeom
 
 
-load_prc_file_data("", """
-    textures-power-2 none
-    gl-coordinate-system default
-    window-title Panda3D Walking In BulletWorld
-    filled-wireframe-apply-shader true
-    stm-max-views 8
-    stm-max-chunk-count 2048""")
+# load_prc_file_data("", """
+#     textures-power-2 none
+#     gl-coordinate-system default
+#     window-title Panda3D Tower Crash
+#     filled-wireframe-apply-shader true
+#     stm-max-views 8
+#     stm-max-chunk-count 2048""")
 
 
 PATH_SKY = 'models/blue-sky/blue-sky-sphere'
@@ -39,14 +38,10 @@ class Foundation(NodePath):
 
     def __init__(self):
         super().__init__(BulletRigidBodyNode('foundation'))
-        # stone = base.loader.load_model(PATH_STONE)
         stone = CylinderGeom()
         stone.set_texture(
             base.loader.load_texture(TEXTURE_STONE), 1)
         stone.reparent_to(self)
-        
-        # end, tip = stone.get_tight_bounds()
-        # self.node().add_shape(BulletCylinderShape((tip - end) / 2))
 
         shape = BulletConvexHullShape()
         shape.add_geom(stone.node().get_geom(0))
@@ -54,8 +49,6 @@ class Foundation(NodePath):
 
         self.set_scale(20)
         self.set_collide_mask(BitMask32.bit(2))
-        
-        # self.set_p(180)
         self.set_pos(Point3(0, 0, -15))
         # self.set_pos(Point3(-2, 12, -10))
 
@@ -116,66 +109,19 @@ class Scene(NodePath):
         self.foundation.reparent_to(self)
         world.attach(self.foundation.node())
 
-        self.surface = WaterSurface()
-        self.surface.reparent_to(self)
-        world.attach(self.surface.node())
+        # self.surface = WaterSurface()
+        # self.surface.reparent_to(self)
+        # world.attach(self.surface.node())
 
         self.bottom = WaterBottom()
         self.bottom.reparent_to(self)
         world.attach(self.bottom.node())
 
-        # self.create_water()
+        self.create_water()
         # self.generate_fog()
-        self.create_fog()
+        # self.create_fog()
 
         # self.reparent_to(base.render)
-
-    def create_fog(self):
-        fog = Fog("fog")
-        fog.set_mode(Fog.MExponentialSquared)
-        fog.set_color(128/255.0, 128/255.0, 128/255.0)
-        fog.set_exp_density(0.013)
-        render.set_fog(fog)
-
-        # fog = Fog("fog")
-        # fog.set_mode(Fog.MExponentialSquared)
-        # # fog.set_color(128/255.0, 128/255.0, 128/255.0)
-        # color = (0.8, 0.8, 0.8)
-        # fog.set_color(*color)
-        # fog.set_exp_density(0.013)
-        # base.render.set_fog(fog)
-
-        # pass
-        # self.fog0color=(0.66,0.75,0.85,1.0)
-        # base.setBackgroundColor(self.fog0color)
-        # self.fog0=Fog('fog')
-        # self.fog0.setColor(self.fog0color)
-        # self.fog0.setMode(Fog.MExponentialSquared )
-        # self.fog0.setExpDensity(0.0002)
-        # base.render.setFog(self.fog0)
-
-
-
-        # fog = Fog("fog")
-        # fog.set_mode(Fog.MExponentialSquared)
-        # fog.set_color(128/255.0, 128/255.0, 128/255.0)
-        # fog.set_exp_density(0.013)
-        # base.render.set_fog(fog)
-
-       
-        # color = (0.8, 0.8, 0.8)
-        # exp_fog = Fog('sample_fog')
-        # exp_fog.set_color(*color)
-        # # exp_fog.set_mode(Fog.M_linear)
-        # # exp_fog.setLinearOnsetPoint(0, -128, -100)
-        # # exp_fog.set_linear_range(0, 100)
-        # exp_fog.setLinearFallback(45, 160, 320)
-        # np = self.surface.attach_new_node(exp_fog)
-
-        # np = self.sky.attach_new_node(exp_fog)
-        # base.render.set_fog(exp_fog)
-        # self.sky.set_fog(exp_fog)
-        # np.set_pos(0, 0, -5)
 
     def create_water(self):
         size = 512  # size of the wave buffer
@@ -231,64 +177,12 @@ class Scene(NodePath):
         # self.water_plane.set_shader_input('u_resolution', self.water_buffer.get_size())
 
 
-    def generate_fog(self):
-        size = 512  # size of the wave buffer
-        cm = CardMaker('plane')
-        cm.set_frame(0, 256, 0, 256)
-        self.fog_plane = base.render.attach_new_node(cm.generate())
-        self.fog_plane.look_at(0, -1, 1)
-
-        # pos = self.terrain.get_pos()
-        # pos.z = -3
-        # print(pos)
-        self.fog_plane.set_pos(Point3(-127.5, -127.5, 0))
-        self.fog_plane.flatten_strong()
-        self.fog_plane.set_shader(Shader.load(Shader.SL_GLSL, "fog_v.glsl", "fog_f.glsl"))
-        
-        self.fog_buffer = base.win.make_texture_buffer('fog', 512, 512)
-        self.fog_buffer.set_clear_color(base.win.get_clear_color())
-        self.fog_buffer.set_sort(-1)
-
-        self.fog_camera = base.make_camera(self.fog_buffer)
-        self.fog_camera.reparent_to(base.render)
-        self.fog_camera.node().set_lens(base.camLens)
-        self.fog_camera.node().set_camera_mask(BitMask32.bit(1))
-
-
-
-        self.fog_plane.set_shader_input("pi", LVecBase2f(3.14, 10))
-        self.fog_plane.set_shader_input("gamma", LVecBase2f(2.2, 0.45))
-        self.fog_plane.set_shader_input("backgroundColor0", LColor(0.392, 0.537, 0.561, 1))
-        self.fog_plane.set_shader_input("backgroundColor1", LColor(0.953, 0.733, 0.525, 1))
-        self.fog_plane.set_shader_input("positionTexture0", self.fog_buffer.get_texture(0))
-        self.fog_plane.set_shader_input("positionTexture1", self.fog_buffer.get_texture())
-        self.fog_plane.set_shader_input("smokeMaskTexture", self.fog_buffer.get_texture())
-        self.fog_plane.set_shader_input("sunPosition", LVecBase2f(0.5, 0))
-        self.fog_plane.set_shader_input("origin", Point3(0, 0, 0))
-        self.fog_plane.set_shader_input("nearFar", LVecBase2f(2.0, 9.0))
-        self.fog_plane.set_shader_input("enabled", True)
-
-
-
-
-        # self.water_buffer = base.win.make_texture_buffer('water', 512, 512)
-        # self.water_buffer.set_clear_color(base.win.get_clear_color())
-        # self.water_buffer.set_sort(-1)
-
-        # self.water_camera = base.make_camera(self.water_buffer)
-        # self.water_camera.reparent_to(base.render)
-        # self.water_camera.node().set_lens(base.camLens)
-        # self.water_camera.node().set_camera_mask(BitMask32.bit(1))
-
-
-
-
-if __name__ == '__main__':
-    base = ShowBase()
-    base.disableMouse()
-    base.camera.setPos(10, -40, 10)  # 20, -20, 5
-    # base.camera.setPos(-2, 12, 30)  # 20, -20, 5
-    # base.camera.setP(-80)
-    base.camera.lookAt(-2, 12, 10)  # 5, 0, 3
-    scene = Scene()
-    base.run()
+# if __name__ == '__main__':
+#     base = ShowBase()
+#     base.disableMouse()
+#     base.camera.setPos(10, -40, 10)  # 20, -20, 5
+#     # base.camera.setPos(-2, 12, 30)  # 20, -20, 5
+#     # base.camera.setP(-80)
+#     base.camera.lookAt(-2, 12, 10)  # 5, 0, 3
+#     scene = Scene()
+#     base.run()
