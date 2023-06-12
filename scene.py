@@ -1,37 +1,16 @@
 from panda3d.bullet import BulletRigidBodyNode
 from panda3d.bullet import BulletPlaneShape, BulletConvexHullShape
-from panda3d.core import Vec3, Point3, LColor, BitMask32, LVecBase2f
-from panda3d.core import PandaNode, NodePath, TransparencyAttrib
-
-
-from panda3d.bullet import BulletHeightfieldShape, ZUp
-from panda3d.core import ShaderTerrainMesh, Shader, load_prc_file_data
-from panda3d.core import SamplerState, ShaderTerrainMesh
-from panda3d.core import CardMaker, TextureStage, BitMask32
-from panda3d.core import TransparencyAttrib, CullFaceAttrib
-from panda3d.core import Vec3, Point3, Texture, Fog
-from panda3d.core import NodePath, Plane, PlaneNode, PandaNode
-from direct.interval.LerpInterval import LerpTexOffsetInterval
-from panda3d.core import Filename
-from panda3d.core import PNMImage
-
+from panda3d.core import Vec3, Point3, BitMask32, CardMaker
+from panda3d.core import PandaNode, NodePath, TransparencyAttrib, CullFaceAttrib
+from panda3d.core import Shader
+from panda3d.core import Texture
+from panda3d.core import Plane, PlaneNode
 
 from create_geomnode import CylinderGeom
 
 
-# load_prc_file_data("", """
-#     textures-power-2 none
-#     gl-coordinate-system default
-#     window-title Panda3D Tower Crash
-#     filled-wireframe-apply-shader true
-#     stm-max-views 8
-#     stm-max-chunk-count 2048""")
-
-
 PATH_SKY = 'models/blue-sky/blue-sky-sphere'
-PATH_STONE = 'models/cylinder/cylinder'
 TEXTURE_STONE = 'textures/envir-rock1.jpg'
-PATH_SEA = 'models/bump/bump'
 
 
 class Foundation(NodePath):
@@ -50,7 +29,6 @@ class Foundation(NodePath):
         self.set_scale(20)
         self.set_collide_mask(BitMask32.bit(2))
         self.set_pos(Point3(0, 0, -15))
-        # self.set_pos(Point3(-2, 12, -10))
 
 
 class Sky(NodePath):
@@ -63,14 +41,6 @@ class Sky(NodePath):
         sky.reparent_to(self)
 
 
-class WaterSurface(NodePath):
-
-    def __init__(self):
-        super().__init__(BulletRigidBodyNode('water_surface'))
-        self.set_collide_mask(BitMask32.bit(3))
-        self.node().add_shape(BulletPlaneShape(Vec3.up(), 0))
-
-
 class WaterBottom(NodePath):
 
     def __init__(self):
@@ -79,76 +49,41 @@ class WaterBottom(NodePath):
         self.node().add_shape(BulletPlaneShape(Vec3.up(), -10))
 
 
-class Sea(NodePath):
-
-    def __init__(self):
-        super().__init__(PandaNode('sea'))
-        sea = base.loader.load_model(PATH_SEA)
-        sea.reparent_to(self)
-        self.set_transparency(TransparencyAttrib.M_alpha)
-        self.set_scale(13)
-        self.set_pos(-2, 12, 0.5)
-        self.set_color(LColor(0.25, 0.41, 1, 0.3))
-        self.set_r(180)
-
-
 class Scene(NodePath):
 
     def __init__(self, world):
-    # def __init__(self):
         super().__init__(PandaNode('scene'))
         self.sky = Sky()
         self.sky.reparent_to(self)
-        
-        # sea = Sea()
-        # sea.reparent_to(self)
-
-        # base.setBackgroundColor(0.5, 0.8, 0.9)
 
         self.foundation = Foundation()
         self.foundation.reparent_to(self)
         world.attach(self.foundation.node())
-
-        # self.surface = WaterSurface()
-        # self.surface.reparent_to(self)
-        # world.attach(self.surface.node())
 
         self.bottom = WaterBottom()
         self.bottom.reparent_to(self)
         world.attach(self.bottom.node())
 
         self.create_water()
-        # self.generate_fog()
-        # self.create_fog()
-
-        # self.reparent_to(base.render)
 
     def create_water(self):
         size = 512  # size of the wave buffer
         cm = CardMaker('plane')
         cm.set_frame(0, 256, 0, 256)
         self.water_plane = base.render.attach_new_node(cm.generate())
+        self.water_plane.set_transparency(TransparencyAttrib.MAlpha)
         self.water_plane.look_at(0, 0, -1)
 
-        # pos = self.terrain.get_pos()
-        # pos.z = -3
-        # print(pos)
-        self.water_plane.set_pos(Point3(-127.5, -127.5, 0))
+        self.water_plane.set_pos(Point3(-128, -128, 0))
         self.water_plane.flatten_strong()
-        self.water_plane.set_shader(Shader.load(Shader.SL_GLSL, 'water_v.glsl', 'water_f.glsl'))
-
-        # self.water_plane.set_shader(Shader.load(Shader.SL_GLSL, 'fog_v.glsl', 'fog_f.glsl'))
+        self.water_plane.set_shader(Shader.load(Shader.SL_GLSL, 'shaders/water_v.glsl', 'shaders/water_f.glsl'))
         self.water_plane.set_shader_input('size', size)
-        self.water_plane.set_shader_input('normal_map', base.loader.load_texture('normal.png'))
+        self.water_plane.set_shader_input('normal_map', base.loader.load_texture('images/normal.png'))
 
-        # self.props = self.win.get_properties()
-        # self.water_plane.set_shader_input('u_resolution', self.props.get_size())
-
-        # light_pos = (128.0, 300.0, 50.0, 500 * 500)
         light_pos = (-20, 300.0, 50.0, 500 * 500)    # (0, 128.0, 20.0, 500 * 500)
         light_color = (0.9, 0.9, 0.9, 1.0)
-        self.water_plane.set_shader_input('light_pos', light_pos)      # render.setShaderInput('light_pos', light_pos)
-        self.water_plane.set_shader_input('light_color', light_color)  # render.setShaderInput('light_color', light_color)
+        self.water_plane.set_shader_input('light_pos', light_pos)
+        self.water_plane.set_shader_input('light_color', light_color)
         self.water_plane.hide(BitMask32.bit(1))
 
         self.water_buffer = base.win.make_texture_buffer('water', 512, 512)
@@ -164,7 +99,6 @@ class Scene(NodePath):
         reflect_tex.set_wrap_u(Texture.WMClamp)
         reflect_tex.set_wrap_v(Texture.WMClamp)
 
-        # self.clip_plane = Plane(Vec3(0, 0, 1), Point3(0, 0, 0.5))
         self.clip_plane = Plane(Vec3(0, 0, 1), Point3(0, 0, -5))  # -4 and -5 are OK too. 
         clip_plane_node = base.render.attach_new_node(PlaneNode('water', self.clip_plane))
         tmp_node = NodePath('StateInitializer')
@@ -174,7 +108,6 @@ class Scene(NodePath):
         self.water_camera.node().set_initial_state(tmp_node.get_state())
         self.water_plane.set_shader_input('camera', self.water_camera)
         self.water_plane.set_shader_input('reflection', reflect_tex)
-        # self.water_plane.set_shader_input('u_resolution', self.water_buffer.get_size())
 
 
 # if __name__ == '__main__':

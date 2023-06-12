@@ -75,8 +75,8 @@ class Tower(NodePath):
                 self.activate(block)
 
         block = next(self.find_blocks(self.inactive_top))
-        self.floater.set_z(block.get_z() - self.block_h)
-        # self.floater.set_z(block.get_z())
+        # self.floater.set_z(block.get_z() - self.block_h)
+        self.floater.set_z(block.get_z())
 
     def attach_block(self, block):
         self.world.attach(block.node())

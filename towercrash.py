@@ -26,7 +26,6 @@ load_prc_file_data("", """
 
 class Game(Enum):
 
-    INITIALIZE = auto()
     READY = auto()
     START = auto()
     PLAY = auto()
@@ -77,7 +76,7 @@ class TowerCrash(ShowBase):
 
         self.start_screen = StartScreen()
         self.start_screen.set_up()
-        self.state = Game.INITIALIZE
+        self.start_new_game()
 
         self.accept('z', self.test_move_camera, ['z', 'up'])
         self.accept('shift-z', self.test_move_camera, ['z', 'down'])
@@ -92,12 +91,19 @@ class TowerCrash(ShowBase):
         self.accept('r', self.test_move_camera, ['r', 'up'])
         self.accept('shift-r', self.test_move_camera, ['r', 'down'])
 
+        self.accept('k', self.test_look_at)
+
         self.accept('escape', sys.exit)
         self.accept('d', self.toggle_debug)
         self.accept('mouse1', self.mouse_click)
         self.accept('mouse1-up', self.mouse_release)
 
         self.taskMgr.add(self.update, 'update')
+
+    def test_look_at(self):
+        self.look_at_pt += 0.2
+        print(self.camera_lowest_z + 4 * 2.5, self.look_at_pt)
+        self.camera.look_at(0, 0, self.look_at_pt)
 
     def toggle_debug(self):
         if self.debug.is_hidden():
@@ -110,8 +116,10 @@ class TowerCrash(ShowBase):
         self.dragging = 0
         self.click = False
 
+        if self.tower_num >= len(towers):
+            self.tower_num = 0
+
         tower = towers[self.tower_num]
-        # tower = towers[1]
         self.tower = tower(24, self.scene.foundation, self.world)
         self.tower.build()
 
@@ -124,8 +132,7 @@ class TowerCrash(ShowBase):
         self.ball_cnt = self.tower.level
 
     def setup_ball(self):
-        start_pos = Point3(0, -60, 0)  # -60
-        # normal = True if self.ball_cnt >= 15 else False
+        start_pos = Point3(0, -60, -0.8)  # -60
         normal = False
         self.ball.setup(start_pos, self.navigator, normal)
 
@@ -192,20 +199,13 @@ class TowerCrash(ShowBase):
             distance = 10 * dt
             self.navigator.set_z(self.navigator.get_z() - distance)
 
-    def game_start(self, task):
+    def _start(self, task):
         self.state = Game.READY
         return task.done
 
-    def game_over(self, task):
-        if self.tower.tower_top <= 1:
-            self.tower_num += 1
-        if self.tower_num >= len(towers):
-            self.tower_num = 0
-
-        self.tower.remove_all_blocks()
-        self.state = Game.INITIALIZE
-
-        return task.done
+    def start_new_game(self):
+        self.initialize_game()
+        self.taskMgr.do_method_later(3, self._start, 'start')
 
     def clean_sea_bottom(self):
         for con in self.world.contact_test(self.scene.bottom.node()).get_contacts():
@@ -217,10 +217,6 @@ class TowerCrash(ShowBase):
         self.scene.water_camera.setMat(self.cam.getMat(self.render) * self.scene.clip_plane.getReflectionMat())
 
         match self.state:
-            case Game.INITIALIZE:
-                self.initialize_game()
-                self.taskMgr.do_method_later(3, self.game_start, 'game_start')
-
             case Game.READY:
                 if self.start_screen.disappear(dt):
                     self.start_screen.tear_down()
@@ -233,8 +229,10 @@ class TowerCrash(ShowBase):
 
             case Game.GAMEOVER:
                 if self.start_screen.appear(dt):
-                    self.state = None
-                    self.taskMgr.do_method_later(3, self.game_over, 'gameover')
+                    if self.tower.tower_top <= 1:
+                        self.tower_num += 1
+                    self.tower.remove_all_blocks()
+                    self.start_new_game()
 
             case Game.PLAY:
                 if self.mouseWatcherNode.has_mouse():
@@ -343,7 +341,7 @@ class StartScreen:
         self.color_plane.flatten_strong()
 
         self.color_plane.set_shader(
-            Shader.load(Shader.SL_GLSL, 'shaders/color_gradient_v.glsl', 'shaders/color_gradient_f.glsl')
+            Shader.load(Shader.SL_GLSL, 'shaders/color_v.glsl', 'shaders/color_f.glsl')
         )
         props = base.win.get_properties()
         self.color_plane.set_shader_input('u_resolution', props.get_size())

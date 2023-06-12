@@ -110,7 +110,7 @@ class Balls(NodePath):
 
     def __init__(self, name):
         super().__init__(BulletRigidBodyNode(name))
-        self.model = SphereGeom()
+        self.model = SphereGeom(radius=2.0)
         self.model.reparent_to(self)
         end, tip = self.model.get_tight_bounds()
         size = tip - end
