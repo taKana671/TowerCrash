@@ -1,15 +1,17 @@
 # TowerCrash
 Tower Crash Game made with Python and Panda3D
 
+The blocks of a tower fall by gravity in Bullet World of Panda3d at the timing when a ball hit the tower. The trajectory of the ball is calculated by using Bézier curve.
+All of the blocks are procedurally created, not by using 3D models. Press D key to toggle debug ON and OFF.
+
 ![demo_towercrash](https://user-images.githubusercontent.com/48859041/190886190-9438a433-bb0d-4cf7-b912-b4172f7305f3.png)
 
 # Requirements
-* Python 3.9
-* Panda3D 1.10.11
-* Pmw 2.0.1
+* Python 3.11
+* Panda3D 1.10.13
 
 # Environment
-* Windows10
+* Windows11
 
 # Usage
 * Execute a command below on the command line.
