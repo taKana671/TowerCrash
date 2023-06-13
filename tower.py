@@ -96,21 +96,24 @@ class Tower(NodePath):
                 yield block
 
     def update(self):
-        top_block = max(
-            (b for b in self.blocks.get_children() if b.node().is_active()),
-            key=lambda x: x.get_z()
-        )
-        top_row = int(top_block.get_z() / self.block_h) + 1
+        try:
+            top_block = max(
+                (b for b in self.blocks.get_children() if b.node().is_active()),
+                key=lambda x: x.get_z()
+            )
+            top_row = int(top_block.get_z() / self.block_h) + 1
 
-        if (activate_rows := self.tower_top - top_row) > 0:
-            for _ in range(activate_rows):
-                if self.inactive_top >= 0:
-                    for block in self.find_blocks(self.inactive_top):
-                        self.activate(block)
-                    self.inactive_top -= 1
-                    self.floater.set_z(self.floater.get_z() - self.block_h)
+            if (activate_rows := self.tower_top - top_row) > 0:
+                for _ in range(activate_rows):
+                    if self.inactive_top >= 0:
+                        for block in self.find_blocks(self.inactive_top):
+                            self.activate(block)
+                        self.inactive_top -= 1
+                        self.floater.set_z(self.floater.get_z() - self.block_h)
 
-            self.tower_top = top_row
+                self.tower_top = top_row
+        except ValueError:
+            pass
 
     def clean_up(self, block):
         """block (NodePath)
