@@ -5,13 +5,14 @@ from direct.gui.DirectGui import OnscreenText, Plain
 from direct.showbase.ShowBaseGlobal import globalClock
 from direct.showbase.ShowBase import ShowBase
 from panda3d.bullet import BulletWorld, BulletDebugNode
-from panda3d.core import NodePath, TextNode, TransparencyAttrib
-from panda3d.core import Shader, load_prc_file_data
-from panda3d.core import Vec3, BitMask32, Point3, CardMaker
+from panda3d.core import NodePath, TextNode
+from panda3d.core import load_prc_file_data
+from panda3d.core import Vec3, BitMask32, Point3
 
 from balls import ColorBall
 from lights import BasicAmbientLight, BasicDayLight
 from scene import Scene
+from start_screen import StartScreen
 from tower import towers
 
 
@@ -256,65 +257,65 @@ class TowerCrash(ShowBase):
         return task.cont
 
 
-class StartScreen:
+# class StartScreen:
 
-    def __init__(self):
-        self.alpha = 1.0
-        self.create_color_gradient()
-        self.create_color_camera()
+#     def __init__(self):
+#         self.alpha = 1.0
+#         self.create_color_gradient()
+#         self.create_color_camera()
 
-    def create_color_gradient(self):
-        cm = CardMaker('gradient')
-        cm.set_frame(0, 256, 0, 256)
-        self.color_plane = NodePath(cm.generate())
-        self.color_plane.look_at(0, 1, 0)
-        self.color_plane.set_transparency(TransparencyAttrib.MAlpha)
-        self.color_plane.set_pos(Point3(-128, -50, 0))  # Point3(-128, -128, -2)
-        self.color_plane.flatten_strong()
+#     def create_color_gradient(self):
+#         cm = CardMaker('gradient')
+#         cm.set_frame(0, 256, 0, 256)
+#         self.color_plane = NodePath(cm.generate())
+#         self.color_plane.look_at(0, 1, 0)
+#         self.color_plane.set_transparency(TransparencyAttrib.MAlpha)
+#         self.color_plane.set_pos(Point3(-128, -50, 0))  # Point3(-128, -128, -2)
+#         self.color_plane.flatten_strong()
 
-        self.color_plane.set_shader(
-            Shader.load(Shader.SL_GLSL, 'shaders/color_v.glsl', 'shaders/color_f.glsl')
-        )
-        props = base.win.get_properties()
-        self.color_plane.set_shader_input('u_resolution', props.get_size())
-        self.color_plane.set_shader_input('alpha', self.alpha)
+#         self.color_plane.set_shader(
+#             Shader.load(Shader.SL_GLSL, 'shaders/color_v.glsl', 'shaders/color_f.glsl')
+#         )
+#         props = base.win.get_properties()
+#         self.color_plane.set_shader_input('u_resolution', props.get_size())
+#         self.color_plane.set_shader_input('alpha', self.alpha)
 
-    def create_color_camera(self):
-        self.color_buffer = base.win.make_texture_buffer('gradieng', 512, 512)
-        self.color_buffer.set_clear_color(base.win.get_clear_color())
-        self.color_buffer.set_sort(-1)
+#     def create_color_camera(self):
+#         self.color_buffer = base.win.make_texture_buffer('gradieng', 512, 512)
+#         self.color_buffer.set_clear_color(base.win.get_clear_color())
+#         self.color_buffer.set_sort(-1)
 
-        self.color_camera = base.make_camera(self.color_buffer)
-        self.color_camera.node().set_lens(base.camLens)
-        self.color_camera.node().set_camera_mask(BitMask32.bit(1))
+#         self.color_camera = base.make_camera(self.color_buffer)
+#         self.color_camera.node().set_lens(base.camLens)
+#         self.color_camera.node().set_camera_mask(BitMask32.bit(1))
 
-    def set_up(self):
-        self.color_plane.reparent_to(base.render)
-        self.color_camera.reparent_to(base.render)
+#     def set_up(self):
+#         self.color_plane.reparent_to(base.render)
+#         self.color_camera.reparent_to(base.render)
 
-    def tear_down(self):
-        self.color_plane.detach_node()
-        self.color_camera.detach_node()
+#     def tear_down(self):
+#         self.color_plane.detach_node()
+#         self.color_camera.detach_node()
 
-    def appear(self, dt):
-        if self.alpha == 1.0:
-            return True
+#     def appear(self, dt):
+#         if self.alpha == 1.0:
+#             return True
 
-        self.alpha += dt * 0.1
-        if self.alpha > 1.0:
-            self.alpha = 1.0
+#         self.alpha += dt * 0.1
+#         if self.alpha > 1.0:
+#             self.alpha = 1.0
 
-        self.color_plane.set_shader_input('alpha', self.alpha)
+#         self.color_plane.set_shader_input('alpha', self.alpha)
 
-    def disappear(self, dt):
-        if self.alpha == 0.0:
-            return True
+#     def disappear(self, dt):
+#         if self.alpha == 0.0:
+#             return True
 
-        self.alpha -= dt * 0.1
-        if self.alpha < 0.0:
-            self.alpha = 0.0
+#         self.alpha -= dt * 0.1
+#         if self.alpha < 0.0:
+#             self.alpha = 0.0
 
-        self.color_plane.set_shader_input('alpha', self.alpha)
+#         self.color_plane.set_shader_input('alpha', self.alpha)
 
 
 if __name__ == '__main__':
