@@ -58,12 +58,12 @@ class TowerCrash(ShowBase):
 
         self.world = BulletWorld()
         self.world.set_gravity(Vec3(0, 0, -9.81))
-
         self.debug = self.render.attach_new_node(BulletDebugNode('debug'))
         self.world.set_debug_node(self.debug.node())
 
         self.ambient_light = BasicAmbientLight()
         self.directional_light = BasicDayLight()
+
         self.scene = Scene(self.world)
         self.scene.reparent_to(self.render)
 
@@ -78,32 +78,12 @@ class TowerCrash(ShowBase):
         self.start_screen.set_up()
         self.start_new_game()
 
-        self.accept('z', self.test_move_camera, ['z', 'up'])
-        self.accept('shift-z', self.test_move_camera, ['z', 'down'])
-        self.accept('x', self.test_move_camera, ['x', 'up'])
-        self.accept('shift-x', self.test_move_camera, ['x', 'down'])
-        self.accept('y', self.test_move_camera, ['y', 'up'])
-        self.accept('shift-y', self.test_move_camera, ['y', 'down'])
-        self.accept('h', self.test_move_camera, ['h', 'up'])
-        self.accept('shift-h', self.test_move_camera, ['h', 'down'])
-        self.accept('p', self.test_move_camera, ['p', 'up'])
-        self.accept('shift-p', self.test_move_camera, ['p', 'down'])
-        self.accept('r', self.test_move_camera, ['r', 'up'])
-        self.accept('shift-r', self.test_move_camera, ['r', 'down'])
-
-        self.accept('k', self.test_look_at)
-
         self.accept('escape', sys.exit)
         self.accept('d', self.toggle_debug)
         self.accept('mouse1', self.mouse_click)
         self.accept('mouse1-up', self.mouse_release)
 
         self.taskMgr.add(self.update, 'update')
-
-    def test_look_at(self):
-        self.look_at_pt += 0.2
-        print(self.camera_lowest_z + 4 * 2.5, self.look_at_pt)
-        self.camera.look_at(0, 0, self.look_at_pt)
 
     def toggle_debug(self):
         if self.debug.is_hidden():
@@ -132,9 +112,8 @@ class TowerCrash(ShowBase):
         self.ball_cnt = self.tower.level
 
     def setup_ball(self):
-        start_pos = Point3(0, -60, -0.8)  # -60
-        normal = False
-        self.ball.setup(start_pos, self.navigator, normal)
+        start_pos = Point3(0, -60, -0.8)
+        self.ball.setup(start_pos, self.navigator)
 
         # show the number of throwing a ball.
         self.ball_number_display.reparent_to(self.aspect2d)
@@ -185,11 +164,9 @@ class TowerCrash(ShowBase):
         angle = 0
 
         if (delta := mouse_x - self.mouse_x) < 0:
-            # rotate leftward
-            angle += 90
+            angle += 90   # rotate leftward
         elif delta > 0:
-            # rotate rightward
-            angle -= 90
+            angle -= 90   # rotate rightward
         angle *= dt
 
         self.navigator.set_h(self.navigator.get_h() + angle)
@@ -214,7 +191,8 @@ class TowerCrash(ShowBase):
 
     def update(self, task):
         dt = globalClock.getDt()
-        self.scene.water_camera.setMat(self.cam.getMat(self.render) * self.scene.clip_plane.getReflectionMat())
+        self.scene.water_camera.setMat(
+            self.cam.getMat(self.render) * self.scene.clip_plane.getReflectionMat())
 
         match self.state:
             case Game.READY:
@@ -276,52 +254,6 @@ class TowerCrash(ShowBase):
 
         self.world.do_physics(dt)
         return task.cont
-
-    def test_move_camera(self, direction, move):
-        if direction == 'z':
-            z = self.camera.get_z()
-            if move == 'up':
-                self.camera.set_z(z + 2)
-            elif move == 'down':
-                self.camera.set_z(z - 2)
-
-        if direction == 'y':
-            y = self.camera.get_y()
-            if move == 'up':
-                self.camera.set_y(y + 2)
-            elif move == 'down':
-                self.camera.set_y(y - 2)
-
-        if direction == 'x':
-            x = self.camera.get_x()
-            if move == 'up':
-                self.camera.set_x(x + 2)
-            elif move == 'down':
-                self.camera.set_x(x - 2)
-
-        if direction == 'h':
-            h = self.camera.get_h()
-            if move == 'up':
-                self.camera.set_h(h + 2)
-            elif move == 'down':
-                self.camera.set_h(h - 2)
-
-        if direction == 'p':
-            p = self.camera.get_p()
-            if move == 'up':
-                self.camera.set_p(p + 2)
-            elif move == 'down':
-                self.camera.set_p(p - 2)
-
-        if direction == 'r':
-            r = self.camera.get_r()
-            if move == 'up':
-                self.camera.set_r(r + 2)
-            elif move == 'down':
-                self.camera.set_r(r - 2)
-
-        # self.camera.look_at(-2, 12, 12.5)
-        print(self.camera.get_pos(), self.camera.get_hpr())
 
 
 class StartScreen:

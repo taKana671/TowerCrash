@@ -35,17 +35,16 @@ class ColorBall:
         if self.ball is not None and self.ball.has_parent():
             self.detach_ball()
         self.tower = tower
-        self.used = False
+        self.twotone_used = False
 
-    def setup(self, pos, parent, normal=True):
-        b = 5 if normal else \
-            7 if not self.used else 6
+    def setup(self, pos, parent):
+        b = 7 if not self.twotone_used else 6
 
         match n := random.randint(0, b):
             case 6:
                 self.ball = self.multi_ball
             case 7:
-                self.used = True
+                self.twotone_used = True
                 self.ball = self.twotone_ball
             case _:
                 self.ball = self.normal_ball
@@ -127,16 +126,16 @@ class NormalBall(Balls):
 
     def hit(self, clicked_pos, block, bubbles, tower):
         blocks = []
-        if self.getColor() == block.getColor():
-            tower.get_neighbors(block, block.getColor(), blocks)
+        if self.getColor() == block.get_color():
+            tower.get_neighbors(block, block.get_color(), blocks)
 
-        para = Parallel(bubbles.get_sequence(self.getColor(), clicked_pos))
+        para = Parallel(bubbles.get_sequence(self.get_color(), clicked_pos))
 
         for block in blocks:
-            pos = block.getPos(base.render)
+            pos = block.get_pos(base.render)
             para.append(Sequence(
                 Func(tower.clean_up, block),
-                bubbles.get_sequence(self.getColor(), pos))
+                bubbles.get_sequence(self.get_color(), pos))
             )
         para.start()
 
@@ -145,16 +144,16 @@ class MultiColorBall(Balls):
 
     def __init__(self):
         super().__init__('multicolor_ball')
-        self.model.setTexture(base.loader.loadTexture(PATH_TEXTURE_MULTI), 1)
+        self.model.set_texture(base.loader.load_texture(PATH_TEXTURE_MULTI), 1)
 
     def _hit(self, color, bubbles, tower):
-        for block in tower.judge_colors(lambda x: x.getColor() == color):
-            pos = block.getPos(base.render)
+        for block in tower.judge_colors(lambda x: x.get_color() == color):
+            pos = block.get_pos(base.render)
             yield Sequence(Func(tower.clean_up, block),
                            bubbles.get_sequence(color, pos))
 
     def hit(self, clicked_pos, block, bubbles, tower):
-        color = block.getColor()
+        color = block.get_color()
         Parallel(
             bubbles.get_sequence(color, clicked_pos),
             *[seq for seq in self._hit(color, bubbles, tower)]
@@ -165,17 +164,17 @@ class TwoToneBall(Balls):
 
     def __init__(self):
         super().__init__('twotone_ball')
-        self.model.setTexture(base.loader.loadTexture(PATH_TEXTURE_TWOTONE), 1)
+        self.model.set_texture(base.loader.load_texture(PATH_TEXTURE_TWOTONE), 1)
 
     def _hit(self, color, bubbles, tower):
-        for block in tower.judge_colors(lambda x: x.getColor() != color):
-            pos = block.getPos(base.render)
-            color = block.getColor()
+        for block in tower.judge_colors(lambda x: x.get_color() != color):
+            pos = block.get_pos(base.render)
+            color = block.get_color()
             yield Sequence(Func(tower.clean_up, block),
                            bubbles.get_sequence(color, pos))
 
     def hit(self, clicked_pos, block, bubbles, tower):
-        color = block.getColor()
+        color = block.get_color()
         Parallel(
             bubbles.get_sequence(Colors.random_select(), clicked_pos),
             *[seq for seq in self._hit(color, bubbles, tower)]

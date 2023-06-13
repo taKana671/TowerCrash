@@ -78,7 +78,7 @@ class Scene(NodePath):
         self.water_plane.flatten_strong()
         self.water_plane.set_shader(Shader.load(Shader.SL_GLSL, 'shaders/water_v.glsl', 'shaders/water_f.glsl'))
         self.water_plane.set_shader_input('size', size)
-        self.water_plane.set_shader_input('normal_map', base.loader.load_texture('images/normal.png'))
+        self.water_plane.set_shader_input('normal_map', base.loader.load_texture('images/water_noise.png'))
 
         light_pos = (-20, 300.0, 50.0, 500 * 500)    # (0, 128.0, 20.0, 500 * 500)
         light_color = (0.9, 0.9, 0.9, 1.0)
