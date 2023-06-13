@@ -1,26 +1,24 @@
 import random
 
-from direct.showbase.ShowBase import ShowBase
 from panda3d.core import PandaNode, NodePath
-from panda3d.core import Vec3, Point3
+from panda3d.core import Vec3
 from direct.interval.IntervalGlobal import Sequence, Parallel, Func
 
-
-PATH_BUBBLE = 'models/sphere/sphere'
+from create_geomnode import SphereGeom
 
 
 class Bubbles:
 
     def __init__(self):
         self.numbers = [n for n in range(-5, 5) if n != 0]
-        self.bubble = base.loader.loadModel(PATH_BUBBLE)
+        self.bubble = SphereGeom()
 
     def create_bubble(self, bubbles, color, pos):
-        bubble = self.bubble.copyTo(bubbles)
-        bubble.reparentTo(bubbles)
-        bubble.setPos(pos)
-        bubble.setColor(color)
-        bubble.setScale(0.01)
+        bubble = self.bubble.copy_to(bubbles)
+        bubble.reparent_to(bubbles)
+        bubble.set_pos(pos)
+        bubble.set_color(color)
+        bubble.set_scale(0.2)
 
         return bubble
 
@@ -39,27 +37,15 @@ class Bubbles:
             delta1, delta2 = self.calc_delta()
 
             yield Sequence(
-                bub.posHprScaleInterval(0.5, bub.getPos() + delta1, bub.getHpr(), 0.1),
-                bub.posHprScaleInterval(0.5, bub.getPos() + delta2, bub.getHpr(), 0.01),
+                bub.posHprScaleInterval(0.5, bub.get_pos() + delta1, bub.get_hpr(), 0.1),
+                bub.posHprScaleInterval(0.5, bub.get_pos() + delta2, bub.get_hpr(), 0.01),
             )
 
     def get_sequence(self, color, pos):
         bubbles = NodePath(PandaNode('bubbles'))
-        bubbles.reparentTo(base.render)
+        bubbles.reparent_to(base.render)
 
         return Sequence(
             Parallel(*(seq for seq in self.create_seq(bubbles, color, pos))),
-            Func(lambda: bubbles.removeNode())
+            Func(lambda: bubbles.remove_node())
         )
-
-
-if __name__ == '__main__':
-    base = ShowBase()
-    base.disableMouse()
-    base.camera.setPos(20, -18, 20)  # 20, -20, 5
-    base.camera.setP(-80)
-    base.camera.lookAt(5, 3, 5)  # 5, 0, 3
-    bubbles = Bubbles()
-    seq = bubbles.get_sequence((1, 0, 0, 1), Point3(-2, 12, 1.0))
-    seq.start()
-    base.run()
