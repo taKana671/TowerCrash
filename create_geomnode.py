@@ -30,7 +30,7 @@ class GeomRoot(NodePath):
 
         vertex_count = self.get_vertices(vdata_values, prim_indices)
 
-        vdata = GeomVertexData('cube', fmt, Geom.UHStatic)
+        vdata = GeomVertexData('geom_vertex', fmt, Geom.UHStatic)
         vdata.unclean_set_num_rows(vertex_count)
         vdata_mem = memoryview(vdata.modify_array(0)).cast('B').cast('f')
         vdata_mem[:] = vdata_values
