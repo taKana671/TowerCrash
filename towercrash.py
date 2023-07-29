@@ -94,8 +94,9 @@ class TowerCrash(ShowBase):
 
     def initialize_game(self):
         self.state = None
-        self.dragging = 0
         self.click = False
+        self.dragging = False
+        self.before_mouse_x = None
 
         if self.tower_num >= len(towers):
             self.tower_num = 0
@@ -156,21 +157,29 @@ class TowerCrash(ShowBase):
                 return True
 
     def mouse_click(self):
-        self.click = True
+        self.dragging = True
+        self.dragging_start_time = globalClock.get_frame_time()
 
     def mouse_release(self):
-        self.dragging = 0
+        if globalClock.get_frame_time() - self.dragging_start_time < 0.2:
+            self.click = True
+        self.dragging = False
+        self.before_mouse_x = None
 
     def rotate_camera(self, mouse_x, dt):
+        if self.before_mouse_x is None:
+            self.before_mouse_x = mouse_x
+
         angle = 0
 
-        if (delta := mouse_x - self.mouse_x) < 0:
+        if (delta := mouse_x - self.before_mouse_x) < 0:
             angle += 90   # rotate leftward
         elif delta > 0:
             angle -= 90   # rotate rightward
-        angle *= dt
 
+        angle *= dt
         self.navigator.set_h(self.navigator.get_h() + angle)
+        self.before_mouse_x = mouse_x
 
     def move_down_camera(self, dt):
         if self.navigator.get_z() > self.camera_lowest_z:
@@ -222,14 +231,11 @@ class TowerCrash(ShowBase):
                             self.ball_number_display.detach_node()
                             self.ball_cnt -= 1
                             self.state = Game.THROW
-                        else:
-                            self.mouse_x = 0
-                            self.dragging = globalClock.get_frame_count() + self.wait_count
                         self.click = False
 
-                    if 0 < self.dragging <= globalClock.get_frame_count():
-                        self.rotate_camera(mouse_pos.x, dt)
-                        self.mouse_x = mouse_pos.x
+                    if self.dragging:
+                        if globalClock.get_frame_time() - self.dragging_start_time >= 0.2:
+                            self.rotate_camera(mouse_pos.x, dt)
 
             case Game.THROW:
                 if not self.ball.move(dt):
